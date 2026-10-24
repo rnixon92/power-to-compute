@@ -34,9 +34,10 @@ describe("build calendar", () => {
     const hut = cal.rows.find((r) => r.company.ticker === "HUT")!;
     expect(hut.now).toBe(0);
     expect(hut.first).toBe(Date.parse("2027-04-01"));
-    const apld = cal.rows.find((r) => r.company.ticker === "APLD")!;
-    expect(apld.live).toBe(0);
-    expect(apld.now).toBeGreaterThan(0);
-    expect(apld.first).toBeNull();
+    const cifr = cal.rows.find((r) => r.company.ticker === "CIFR")!;
+    expect(cifr.live).toBe(0);
+    expect(cifr.now).toBeGreaterThan(0);
+    expect(cifr.first).toBeNull();
+    expect(cal.rows.find((r) => r.company.ticker === "APLD")!.now).toBe(250);
   });
 });
