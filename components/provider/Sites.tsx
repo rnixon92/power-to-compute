@@ -117,12 +117,18 @@ function SiteCard({ campus, blocks, today, source }: { campus: Campus; blocks: B
                 <small>{r.timing === "company" ? "Company timeline" : "Our placement"}{b.start !== Date.parse(r.start) ? ", with your delay" : ""}</small>
               </div>
               <div className="cell">
-                <span className="eyebrow">Rent at full ramp</span>
-                <b>{usdCompact(b.revenue)}/yr</b>
+                <span className="eyebrow">Rent, first full year</span>
+                <b>{usdCompact(b.revenue / b.averageFactor)}/yr</b>
                 <small>
-                  {b.revenueFrom === "company" ? "Disclosed" : "Your rate"}
+                  {b.revenueFrom === "company" ? "From the company" : "Your rate"}
                   {rate ? ` · $${Math.round(rate)}/kW·mo` : ""}
                 </small>
+                {b.escalator ? (
+                  <small>
+                    Rises {(b.escalator * 100).toFixed(1).replace(/\.0$/, "")}% a year{b.escalatorFrom === "company" ? ", disclosed" : ", your assumption"}
+                    {b.averageFactor > 1 ? `. Averages ${usdCompact(b.revenue)} over ${r.termYears ?? 15} years` : ""}
+                  </small>
+                ) : null}
                 {r.contractValue ? <small>{usdCompact(r.contractValue)}{r.termYears ? ` over ${r.termYears} yrs` : ""}</small> : r.termYears ? <small>{r.termYears}-year term</small> : null}
                 <small>{b.revenue ? `${Math.round((b.noi / b.revenue) * 100)}% margin` : ""}{b.noiFrom === "assumed margin" ? ", your assumption" : b.noiFrom === "company" ? ", disclosed NOI" : ", disclosed"}</small>
               </div>

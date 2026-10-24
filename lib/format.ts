@@ -83,3 +83,11 @@ export function usdTick(v: number): string {
   if (Math.abs(v) >= 1e6) return `$${+(v / 1e6).toFixed(0)}M`;
   return `$${Math.round(v)}`;
 }
+
+/** An implied share price. Equity cannot go below zero, so a negative result reads as "Under $0". */
+export function implied(n: number | null): string {
+  if (n == null || !Number.isFinite(n)) return "—";
+  return n > 0 ? px(n) : "Under $0";
+}
+
+export const UNDER_ZERO = "Debt, other claims and build cost still to spend come to more than the business is worth under these assumptions.";

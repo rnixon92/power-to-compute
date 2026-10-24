@@ -33,6 +33,8 @@ export interface Scenario {
   dilution: number;
   /** IT megawatts per gross or utility megawatt. */
   conversion: number;
+  /** Annual rent escalator for leases that do not disclose one. GPU cloud contracts do not escalate. */
+  escalator: number;
   /** Multiple on annual gross profit, after its share of overhead, for businesses outside the AI forecast. */
   otherMultiple: number;
   /** Count stock-based pay as a cost inside overhead. */
@@ -64,7 +66,7 @@ export const defaultScenario: Scenario = {
   capRate: 0.075,
   year: 2030,
   discount: 0.1,
-  leaseRate: 155,
+  leaseRate: 125,
   gpuRate: 9.7,
   coloMargin: 0.85,
   gpuMargin: 0.85,
@@ -78,6 +80,7 @@ export const defaultScenario: Scenario = {
   slip: 0,
   dilution: 0,
   conversion: 0.7,
+  escalator: 0.03,
   otherMultiple: 4,
   stockPay: true,
 };
@@ -186,6 +189,7 @@ const numParams: { key: NumKey; q: string; scale: number; min: number; max: numb
   { key: "dilution", q: "dil", scale: 100, min: 0, max: 30 },
   { key: "conversion", q: "cv", scale: 100, min: 30, max: 100 },
   { key: "otherMultiple", q: "om", scale: 1, min: 0, max: 15 },
+  { key: "escalator", q: "esc", scale: 100, min: 0, max: 8 },
 ];
 
 const tierCode: Record<Tier, string> = { live: "l", contracted: "c", announced: "a", pipeline: "p" };

@@ -13,7 +13,7 @@ const YEARS = [2026, 2027, 2028, 2029, 2030];
 export function Assumptions({ btc }: { btc: { price: number; asOf: string } | null }) {
   const { scenario: s, set, replace, panel, closePanel } = useScenario();
   const [copied, setCopied] = useState(false);
-  const leaseHint = disclosedLeaseRate(book);
+  const leaseHint = disclosedLeaseRate(book, s);
   const chip = scenarioChip(s);
   const pct = (v: number) => `${Math.round(v * 100)}%`;
   const ramps = book.flatMap((c) => c.ramps);
@@ -114,7 +114,8 @@ export function Assumptions({ btc }: { btc: { price: number; asOf: string } | nu
         <section className="assume-group">
           <h3>Landlords</h3>
           <p className="note">Fills a gap only where a company has not disclosed rent, margin or build cost. Moves WULF, GLXY, CORZ, CIFR, APLD, HUT, RIOT, CLSK and MARA. Does not move IREN.</p>
-          <Slider label="Lease rate, where rent is private" value={s.leaseRate} min={80} max={300} step={5} format={(v) => `$${v}/kW·mo`} hint={`Disclosed leases in the group average $${Math.round(leaseHint)}/kW·mo.`} onChange={(v) => set({ leaseRate: v })} />
+          <Slider label="Lease rate, where rent is private" value={s.leaseRate} min={80} max={300} step={5} format={(v) => `$${v}/kW·mo`} hint={`A starting rent, which then rises at the escalator. Disclosed leases in the group start at about $${Math.round(leaseHint)}/kW·mo.`} onChange={(v) => set({ leaseRate: v })} />
+          <Slider label="Rent escalator, where undisclosed" value={s.escalator} min={0} max={0.06} step={0.0025} format={(v) => `${(v * 100).toFixed(2).replace(/0$/, "")}% a year`} hint="Hut 8 discloses 3% on River Bend and Beacon Point. Hyperscale leases usually step up 2–4% a year." onChange={(v) => set({ escalator: v })} />
           <Slider label="NOI margin, where undisclosed" value={s.coloMargin} min={0.5} max={0.98} step={0.01} format={pct} hint="Galaxy reports 90%+, Core Scientific 80–85%." onChange={(v) => set({ coloMargin: v })} />
           <Slider label="Build cost, where undisclosed" value={s.buildCost} min={5} max={20} step={0.5} format={(v) => `$${v}M/MW`} hint="TeraWulf guides $8–10M, Hut 8 $9–11M, Galaxy built at $13.5M." onChange={(v) => set({ buildCost: v })} />
           <Slider label="Building depreciation life" value={s.shellLife} min={10} max={40} format={(v) => `${v} years`} onChange={(v) => set({ shellLife: v })} />

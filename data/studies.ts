@@ -120,7 +120,7 @@ export const nvidiaDc = {
   quarterEnded: "2026-07-26",
   revenueBn: 89,
   yoy: 1.17,
-  note: "Data-center revenue for the quarter. A global chip figure, not US data-center power.",
+  note: "Data-center revenue for the quarter. A global chip figure, read as a sign of demand.",
 };
 
 export const azureGrowth = {
@@ -128,7 +128,7 @@ export const azureGrowth = {
   url: "https://news.microsoft.com/source/2026/07/29/microsoft-cloud-and-ai-strength-fuels-fourth-quarter-results-4/",
   quarterEnded: "2026-06-30",
   yoy: 0.43,
-  note: "Azure and other cloud services. A growth rate, not a megawatt figure.",
+  note: "Azure and other cloud services. A growth rate for cloud revenue.",
 };
 
 export const bcgShare = {
@@ -148,7 +148,7 @@ export const pjmLoad = {
   dataCenterGw: 30,
   from: 2024,
   to: 2030,
-  note: "About 30 GW of 32 GW of peak-load growth is data centers. The board says 2030 may still have unmet demand after the queue, no further retirements, and more demand response. It does not publish one shortfall in gigawatts.",
+  note: "About 30 GW of 32 GW of peak-load growth is data centers. The board says 2030 may still have unmet demand after the queue, no further retirements, and more demand response. It leaves the size of any shortfall open.",
 };
 
 export const dominionPlan = {
@@ -167,7 +167,7 @@ export const dominionQueue = {
   requestsGw: 70,
   datedThrough2031Gw: 25,
   peakGw: 24.7,
-  note: "Requests, not a forecast. About 25 GW has a connection date through 2031. The system peak on record was 24.7 GW.",
+  note: "Requests from customers waiting to connect. About 25 GW has a connection date through 2031. The system peak on record was 24.7 GW.",
 };
 
 export const ercotQueue = {

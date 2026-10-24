@@ -9,7 +9,7 @@ const ids = (pile: "ready" | "claimed" | "open") => items.filter((i) => i.pile =
 describe("unsold inventory", () => {
   it("keeps IREN out and splits landlords into three piles", () => {
     expect(items.some((i) => i.ticker === "IREN")).toBe(false);
-    expect(ids("ready")).toEqual(["mara-wolf", "mara-hannibal", "mara-garden", "mara-kearney", "mara-findlay"]);
+    expect(ids("ready")).toEqual(["mara-wolf", "mara-hannibal", "mara-garden", "mara-hansford", "mara-kearney", "mara-findlay", "mara-minden"]);
     expect(ids("claimed")).toEqual(expect.arrayContaining(["hut-rofo", "corz-amd-option", "riot-amd-opt", "clsk-sealy", "clsk-brazoria", "clsk-brazoria-2"]));
     expect(ids("open")).toEqual(expect.arrayContaining(["cifr-colchis", "cifr-other", "wulf-muskie-1", "wulf-hawkeye", "glxy-rest", "riot-corsicana", "mara-matagorda"]));
     expect(ids("ready")).not.toContain("mara-matagorda");

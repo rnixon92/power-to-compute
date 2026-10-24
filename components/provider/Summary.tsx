@@ -5,7 +5,7 @@ import type { Company } from "@/data/types";
 import { blocks, priceByYear, sumTiers, upside, valuation, type Ctx, type Valuation } from "@/lib/forecast";
 import { appliedBasis, scenarioChip, tierLabel } from "@/lib/scenario";
 import { tierVar } from "@/lib/palette";
-import { isoToLabel, mw, px, quarter, usdCompact } from "@/lib/format";
+import { implied, isoToLabel, mw, px, quarter, usdCompact } from "@/lib/format";
 import { useScenario } from "@/components/ScenarioProvider";
 
 const SHOWN = 5;
@@ -85,7 +85,7 @@ export function Summary({ company, ctx, value, multiple }: { company: Company; c
             {years.map((y) => (
               <button key={y.year} type="button" role="radio" aria-checked={y.year === s.year} className={y.year === s.year ? "on" : ""} onClick={() => set({ year: y.year })}>
                 <span>{y.year}</span>
-                <b>{y.price != null && y.price > 0 ? px(y.price) : "—"}</b>
+                <b>{implied(y.price)}</b>
               </button>
             ))}
           </div>
@@ -198,6 +198,7 @@ export function PriceBridge({ company, value }: { company: Company; value: Valua
           <div className="eyebrow">The rest of the company{asOf ? `, balance sheet at ${isoToLabel(asOf)}` : ""}</div>
           <div className="bridge" style={{ marginTop: 8 }}>
             <div><span>AI business today</span><b>{usdCompact(value.aiToday)}</b></div>
+            <div title="NOI after overhead and tax from now until the valuation date, each month discounted to today."><span>Cash it earns before end {s.year}</span><b>+{usdCompact(value.interimToday)}</b></div>
             {company.balance?.other ? (
               <div title={company.balance.other.note}><span>{company.balance.other.label}, {s.otherMultiple}× gross profit after its overhead</span><b>{usdCompact(ai.otherValue)}</b></div>
             ) : null}
@@ -205,7 +206,7 @@ export function PriceBridge({ company, value }: { company: Company; value: Valua
               <div key={l.label} title={l.note}><span>{l.label}</span><b>{l.value < 0 ? "−" : "+"}{usdCompact(Math.abs(l.value))}</b></div>
             ))}
             <div className="total"><span>Equity value today</span><b>{usdCompact(value.equity)}</b></div>
-            <div><span>÷ {value.shares ? `${(value.shares / 1e6).toFixed(0)}M shares` : "shares"}</span><b>{ok ? px(value.price) : "—"}</b></div>
+            <div><span>÷ {value.shares ? `${(value.shares / 1e6).toFixed(0)}M shares` : "shares"}</span><b>{implied(value.price)}</b></div>
           </div>
         </div>
       </div>

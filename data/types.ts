@@ -66,6 +66,8 @@ export interface Ramp {
   start: string;
   /** Fully online. The forecast ramps linearly between start and full. */
   full?: string;
+  /** Power is already connected and running at the site, so it could be leased without waiting on the grid. */
+  energized?: boolean;
   /** "company" when both dates come from a disclosure, "estimate" when we placed them. */
   timing: "company" | "estimate";
   /** Annual revenue at full ramp. */
@@ -76,6 +78,13 @@ export interface Ramp {
   margin?: number;
   termYears?: number;
   contractValue?: number;
+  /** Annual rent escalator, when the company discloses it. Otherwise the scenario's rate applies. */
+  escalator?: number;
+  /**
+   * What the disclosed revenue figure is. Most are the average over the term, such as contract value
+   * divided by years. "first-year" means the rent the lease starts at.
+   */
+  rentBasis?: "average" | "first-year";
   capexPerMw?: number;
   capexTotal?: number;
   capexKind?: "shell" | "gpu" | "landlord";
@@ -161,6 +170,19 @@ export interface Balance {
   other?: { label: string; grossProfit: number; note: string };
 }
 
+export type EventKind = "lease" | "financing" | "delivery" | "power" | "deal";
+
+/** Something that changed the investment case, on the day it became public. */
+export interface CompanyEvent {
+  date: string;
+  /** The filing gives a month only. Shown as the month, never as a day. */
+  monthOnly?: boolean;
+  kind: EventKind;
+  title: string;
+  detail?: string;
+  source: string;
+}
+
 export interface Company {
   ticker: string;
   name: string;
@@ -180,6 +202,7 @@ export interface Company {
   /** Business lines the HPC model leaves out, so the reader knows what else is in the share price. */
   outside?: string;
   balance?: Balance;
+  events?: CompanyEvent[];
 }
 
 export interface DailyClose {

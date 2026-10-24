@@ -1,6 +1,5 @@
 import type { Company, Ramp } from "@/data/types";
 import { itMw } from "@/lib/forecast";
-import { project } from "@/lib/geo";
 import type { Scenario } from "@/lib/scenario";
 
 export type Pile = "ready" | "claimed" | "open";
@@ -18,17 +17,9 @@ export interface InventoryItem {
   plotted: boolean;
 }
 
-const RUNNING = /\b(available|online)\b/i;
-
-function running(company: Company, ramp: Ramp): boolean {
-  const campus = company.campuses.find((c) => c.id === ramp.campus);
-  const text = [ramp.note, campus?.note, ...(campus?.phases.map((p) => p.note) ?? [])].filter(Boolean).join(" ");
-  return RUNNING.test(text);
-}
-
-function pileOf(company: Company, ramp: Ramp): Pile {
+function pileOf(ramp: Ramp): Pile {
   if (ramp.tenant) return "claimed";
-  if (running(company, ramp)) return "ready";
+  if (ramp.energized) return "ready";
   return "open";
 }
 
@@ -40,14 +31,15 @@ export function inventory(companies: Company[], scenario: Scenario): InventoryIt
     for (const ramp of company.ramps) {
       if (ramp.tier !== "announced" && ramp.tier !== "pipeline") continue;
       const campus = company.campuses.find((c) => c.id === ramp.campus);
-      const plotted = campus?.lat != null && campus.lng != null && project(campus.lat, campus.lng) != null;
+      // Every coordinate in the ledger is in the continental US, so a pin exists wherever a town was named.
+      const plotted = campus?.lat != null && campus.lng != null;
       items.push({
         id: ramp.id,
         ticker: company.ticker,
         campus: ramp.campus,
         label: ramp.label,
         place: campus?.place ?? "",
-        pile: pileOf(company, ramp),
+        pile: pileOf(ramp),
         itMw: itMw(ramp, scenario),
         statedMw: ramp.mw,
         plotted,

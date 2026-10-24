@@ -25,8 +25,9 @@ export function Contracts({ company, blocks }: { company: Company; blocks: Block
               <th className="r">IT MW</th>
               <th className="r">Term</th>
               <th className="r">Contract value</th>
-              <th className="r">Rent a year</th>
+              <th className="r">Rent a year, average</th>
               <th className="r">$/kW·mo</th>
+              <th className="r">Escalator</th>
               <th className="r">Margin</th>
               <th>Online</th>
             </tr>
@@ -46,7 +47,8 @@ export function Contracts({ company, blocks }: { company: Company; blocks: Block
                   <td className="r">{r.termYears ? `${r.termYears} yrs` : "—"}</td>
                   <td className="r">{r.contractValue ? usdCompact(r.contractValue) : r.revenue && r.termYears ? usdCompact(r.revenue * r.termYears) : "—"}</td>
                   <td className="r">{usdCompact(b.revenue)}{b.revenueFrom === "rate" ? <small>your rate</small> : null}</td>
-                  <td className="r">{rate ? `$${Math.round(rate)}` : "—"}</td>
+                  <td className="r">{rate ? `$${Math.round(rate)}` : "—"}{rate ? <small>to start</small> : null}</td>
+                  <td className="r">{b.escalator ? `${(b.escalator * 100).toFixed(1).replace(/\.0$/, "")}%` : "—"}{b.escalator ? <small>{b.escalatorFrom === "company" ? "disclosed" : "assumed"}</small> : null}</td>
                   <td className="r">{b.revenue ? `${Math.round((b.noi / b.revenue) * 100)}%` : "—"}{b.noiFrom === "assumed margin" ? <small>assumed</small> : null}</td>
                   <td>{quarter(b.start)}{b.full !== b.start ? `–${quarter(b.full)}` : ""}</td>
                 </tr>

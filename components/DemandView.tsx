@@ -173,7 +173,7 @@ function AdditionsChart() {
   );
 }
 
-/** OpenAI compute and revenue, each rebased to 2023. Same years, no shared unit. */
+/** OpenAI compute and revenue, each rebased to 2023. Same years, each line rebased to 1 in 2023. */
 function ScaleChart() {
   const [ref, width] = useSize<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
@@ -241,9 +241,9 @@ function ScaleChart() {
 }
 
 const PILES: { id: Pile; label: string; color: string; hint: string }[] = [
-  { id: "ready", label: "Already running", color: "var(--s3)", hint: "The company says the power is available or online. No tenant is named." },
-  { id: "claimed", label: "A tenant has a claim", color: "var(--s4)", hint: "An option, a right of first offer, or exclusivity. Not a signed lease." },
-  { id: "open", label: "No tenant yet", color: "var(--s1)", hint: "Development sites, letters of intent, and mines the company has not called available." },
+  { id: "ready", label: "Already running", color: "var(--s3)", hint: "Power connected and running today, mostly bitcoin mining, with no AI tenant named yet." },
+  { id: "claimed", label: "A tenant has a claim", color: "var(--s4)", hint: "An option, a right of first offer or exclusivity, short of a signed lease." },
+  { id: "open", label: "No tenant yet", color: "var(--s1)", hint: "Development sites, letters of intent, and power still being built out." },
 ];
 
 function PileList({ items, pile, href }: { items: InventoryItem[]; pile: Pile; href: (path: string) => string }) {
@@ -313,7 +313,7 @@ export function DemandView({ states, pins, mapSize }: { states: string[]; pins: 
         <div className="section-head">
           <div>
             <h2>How large it gets</h2>
-            <p>EPRI and LBNL count electricity. Goldman and S&amp;P count power. The perimeters differ, so the two charts stay apart.</p>
+            <p>EPRI and LBNL count electricity. Goldman and S&amp;P count power. Each pair measures a different perimeter, so each gets its own chart.</p>
           </div>
         </div>
         <div className="two-col">
@@ -360,7 +360,7 @@ export function DemandView({ states, pins, mapSize }: { states: string[]; pins: 
         <div className="section-head">
           <div>
             <h2>Two clocks</h2>
-            <p>Goldman is the next two years of construction. The grids are the 2030 plans, set next to the requests in their queues. A request is not a megawatt that will be served.</p>
+            <p>Goldman is the next two years of construction. The grids are the 2030 plans, set next to the requests in their queues. A request is a customer asking to connect, and many never do.</p>
           </div>
         </div>
         <div className="stats">
@@ -439,7 +439,7 @@ export function DemandView({ states, pins, mapSize }: { states: string[]; pins: 
         </div>
         {offMapNames.length ? (
           <p className="note" style={{ marginTop: 10 }}>
-            Off this map, because the company did not name a town: {offMapNames.map((i) => `${i.label} (${i.place})`).join(" · ")}.
+            Off this map until the company names a town: {offMapNames.map((i) => `${i.label} (${i.place})`).join(" · ")}.
           </p>
         ) : null}
       </section>
@@ -468,16 +468,16 @@ export function DemandView({ states, pins, mapSize }: { states: string[]; pins: 
             <div>
               <div className="eyebrow">NVIDIA data center</div>
               <b style={{ fontSize: 22 }}>+{Math.round(nvidiaDc.yoy * 100)}%</b>
-              <p className="note">${nvidiaDc.revenueBn}B in the quarter ended {isoToLabel(nvidiaDc.quarterEnded)}. Global chip sales, not US power.</p>
+              <p className="note">${nvidiaDc.revenueBn}B in the quarter ended {isoToLabel(nvidiaDc.quarterEnded)}. Global chip sales, a lead indicator for power.</p>
             </div>
             <div>
               <div className="eyebrow">Azure</div>
               <b style={{ fontSize: 22 }}>+{Math.round(azureGrowth.yoy * 100)}%</b>
-              <p className="note">Quarter ended {isoToLabel(azureGrowth.quarterEnded)}. A growth rate for the cloud, not a megawatt figure.</p>
+              <p className="note">Quarter ended {isoToLabel(azureGrowth.quarterEnded)}. Cloud revenue growth, a lead indicator for power.</p>
             </div>
           </div>
           <p className="note" style={{ marginTop: 14 }}>
-            BCG puts Amazon, Meta, Microsoft and Google at {Math.round(bcgShare.from * 100)}% of global data-center power, rising toward {Math.round(bcgShare.to * 100)}% by {bcgShare.year}. That is a class share. It is not a split by company, and it does not give OpenAI or Anthropic a gigawatt line.
+            BCG puts Amazon, Meta, Microsoft and Google at {Math.round(bcgShare.from * 100)}% of global data-center power, rising toward {Math.round(bcgShare.to * 100)}% by {bcgShare.year}. That share covers the four together, and the AI labs sit inside it as their customers.
           </p>
         </div>
       </section>
@@ -486,7 +486,7 @@ export function DemandView({ states, pins, mapSize }: { states: string[]; pins: 
         <div className="section-head">
           <div>
             <h2>Where the signed megawatts went</h2>
-            <p>Signed critical IT in this book, by the tenant the company named. This is the slice contracted with these landlords. It is not Microsoft&apos;s or Amazon&apos;s whole global build. A large block is an investment-grade tenant the filing does not name.</p>
+            <p>Signed critical IT in this book, by the tenant the company named. This is the slice each tenant has contracted with these landlords, a small part of its global build. A large block goes to an investment-grade tenant the filing leaves unnamed.</p>
           </div>
         </div>
         <div className="card card-pad">

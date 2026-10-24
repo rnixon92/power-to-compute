@@ -23,6 +23,7 @@ export function ForecastChart({
   implied,
   points,
   today,
+  events = [],
 }: {
   color: string;
   history: DailyClose[];
@@ -31,6 +32,7 @@ export function ForecastChart({
   implied: number | null;
   points: Point[];
   today: number;
+  events?: { t: number; title: string }[];
 }) {
   const [ref, width] = useSize<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
@@ -69,6 +71,7 @@ export function ForecastChart({
   }, [hist, points]);
 
   const ht = hover != null ? times[hover] : null;
+  const near = ht != null ? events.filter((e) => Math.abs(e.t - ht) <= 4 * 86_400_000) : [];
   const hp = ht != null ? pointNear(points, ht) : null;
   const hPrice = ht != null ? priceAt(hist, path, ht) : null;
 
@@ -120,6 +123,16 @@ export function ForecastChart({
               <text x={x(streetT) + 9} y={yP(street.mean) + 4} style={{ paintOrder: "stroke", stroke: "var(--surface)", strokeWidth: 4 }}>Street target {px(street.mean)}</text>
             </g>
           ) : null}
+          {events.filter((e) => e.t >= t0 && e.t <= t1).map((e, i) => {
+            const v = priceAt(hist, path, e.t);
+            const cy = v != null ? yP(v) : yP(0);
+            return (
+              <g key={`${e.t}-${i}`}>
+                <line x1={x(e.t)} x2={x(e.t)} y1={cy + 6} y2={yP(0)} stroke="var(--ink-2)" strokeWidth={1} strokeDasharray="1 3" opacity={0.6} />
+                <circle cx={x(e.t)} cy={cy} r={4.5} fill="var(--surface)" stroke="var(--ink)" strokeWidth={1.5} />
+              </g>
+            );
+          })}
           {implied != null && implied > 0 ? (
             <g>
               <circle cx={x(today)} cy={yP(implied)} r={5} fill="var(--surface)" stroke={color} strokeWidth={2} />
@@ -168,6 +181,9 @@ export function ForecastChart({
               <b>{px(hPrice)}</b>
             </div>
           ) : null}
+          {near.map((e, i) => (
+            <div className="tip-event" key={i}>{e.title}</div>
+          ))}
           {hp ? (
             <>
               <div className="tip-sep" />
@@ -199,6 +215,7 @@ export function ForecastChart({
         <span><svg width="16" height="4" aria-hidden="true"><line x1="0" x2="16" y1="2" y2="2" stroke={color} strokeWidth="2" strokeDasharray="5 4" /></svg>Implied value at run-rate</span>
         {TIERS.map((t) => <span key={t}><i className="swatch" style={{ background: tierVar(t) }} />{tierLabel[t]}</span>)}
         <span><svg width="16" height="4" aria-hidden="true"><line x1="0" x2="16" y1="2" y2="2" stroke="var(--ink-2)" strokeWidth="1.25" strokeDasharray="2 3" /></svg>Everything switched on</span>
+        {events.length ? <span><svg width="10" height="10" aria-hidden="true"><circle cx="5" cy="5" r="3.5" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>Announcement</span> : null}
       </div>
     </div>
   );

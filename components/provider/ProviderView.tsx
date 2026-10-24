@@ -5,13 +5,15 @@ import { useEffect, useMemo, useState } from "react";
 import type { Company, MarketBook } from "@/data/types";
 import { backlog, blocks as toBlocks, ctxFor, liveMw, marketMultiple, pricePath, series, signedMw, sumTiers, TODAY, valuation, yearTable } from "@/lib/forecast";
 import { companyVar } from "@/lib/palette";
-import { isoToLabel, mw, px, usdCompact } from "@/lib/format";
+import { implied, isoToLabel, mw, px, usdCompact } from "@/lib/format";
 import { quoteFor } from "@/lib/quotes";
 import { useHref, useScenario } from "@/components/ScenarioProvider";
 import { Delta, Tweened } from "@/components/ui";
 import { ForecastChart } from "@/components/charts/ForecastChart";
 import { UsMap, type Pin } from "@/components/charts/UsMap";
 import { PriceBridge, Summary } from "@/components/provider/Summary";
+import { EventList } from "@/components/EventList";
+import { allEvents } from "@/lib/events";
 import { Sites } from "@/components/provider/Sites";
 import { BalanceSheet, Contracts, Financing, Sources, YearTable } from "@/components/provider/Sections";
 
@@ -21,6 +23,7 @@ const SECTIONS = [
   { id: "forecast", label: "Forecast" },
   { id: "sites", label: "Sites" },
   { id: "contracts", label: "Contracts" },
+  { id: "timeline", label: "Timeline" },
   { id: "financing", label: "Build and financing" },
   { id: "model", label: "Year by year" },
   { id: "sources", label: "Sources" },
@@ -96,7 +99,7 @@ export function ProviderView({ company, market, states, pins, mapSize }: { compa
           {SECTIONS.map((s) => <a key={s.id} href={`#${s.id}`} className={active === s.id ? "on" : ""}>{s.label}</a>)}
           <button type="button" className="subnav-price" onClick={openPanel} aria-label="Implied price today. Open assumptions">
             <span>Implied</span>
-            <b>{value.price != null && value.price > 0 ? <Tweened value={value.price} format={px} /> : "—"}</b>
+            <b>{value.price != null && value.price > 0 ? <Tweened value={value.price} format={px} /> : implied(value.price)}</b>
             {value.price != null && value.price > 0 ? <Delta value={(value.upside ?? 0) * 100} digits={0} /> : null}
           </button>
         </div>
@@ -122,6 +125,7 @@ export function ProviderView({ company, market, states, pins, mapSize }: { compa
                 implied={value.price}
                 points={points}
                 today={today}
+                events={(company.events ?? []).filter((e) => !e.monthOnly).map((e) => ({ t: Date.parse(e.date), title: e.title }))}
               />
             </div>
           </section>
@@ -145,6 +149,11 @@ export function ProviderView({ company, market, states, pins, mapSize }: { compa
           <section id="contracts">
             <div className="section-head"><div><h2>Contracts</h2><p>Every signed lease or cloud contract, with the rent per kilowatt it implies.</p></div></div>
             <Contracts company={company} blocks={list} />
+          </section>
+
+          <section id="timeline">
+            <div className="section-head"><div><h2>Timeline</h2><p>What {company.name} has announced, newest first, with how the stock moved over the next five trading days.</p></div></div>
+            <EventList events={allEvents([company])} market={market} />
           </section>
 
           <section id="financing">

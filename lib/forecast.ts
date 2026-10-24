@@ -24,6 +24,24 @@ export interface Block {
   capexFrom: "company" | "assumed";
   capexKind: "shell" | "gpu" | "landlord";
   life: number;
+  /** Annual rent escalator applied from rent start. Zero for GPU cloud. */
+  escalator: number;
+  escalatorFrom: "company" | "assumed" | "none";
+  /** Divides an average-over-term rent down to the first year's rent. 1 when the figure is already a first-year rent. */
+  averageFactor: number;
+}
+
+/** Average of (1 + g)^k over a term of T years. A rent quoted as the term average is this many times the first year's rent. */
+export function averageFactor(g: number, years: number): number {
+  if (g <= 0 || years <= 1) return 1;
+  return (Math.pow(1 + g, years) - 1) / (g * years);
+}
+
+/** Rent and NOI at time t, relative to the figure on the block: grows from rent start, starting below the average. */
+export function rentScale(b: Block, t: number): number {
+  if (!b.escalator) return 1;
+  const years = Math.max(0, (t - b.start) / YEAR);
+  return Math.pow(1 + b.escalator, years) / b.averageFactor;
 }
 
 export function itMw(ramp: Ramp, s: Scenario): number {
@@ -75,6 +93,10 @@ export function block(company: Company, ramp: Ramp, s: Scenario): Block {
   }
   const start = shift(ramp.start, s.slip);
   const full = Math.max(start, shift(ramp.full ?? ramp.start, s.slip));
+  const escalator = gpu ? 0 : ramp.escalator ?? s.escalator;
+  const escalatorFrom: Block["escalatorFrom"] = gpu ? "none" : ramp.escalator != null ? "company" : "assumed";
+  // A disclosed contract figure is an average over the term unless the ledger says otherwise. Our lease rate is a starting rent.
+  const basis = ramp.rentBasis ?? (ramp.revenue != null || ramp.noi != null ? "average" : "first-year");
   return {
     ramp,
     ticker: company.ticker,
@@ -90,6 +112,9 @@ export function block(company: Company, ramp: Ramp, s: Scenario): Block {
     capexFrom,
     capexKind: kind,
     life: kind === "gpu" ? s.gpuLife : s.shellLife,
+    escalator,
+    escalatorFrom,
+    averageFactor: basis === "average" ? averageFactor(escalator, ramp.termYears ?? 15) : 1,
   };
 }
 
@@ -132,12 +157,13 @@ export function pointAt(list: Block[], s: Scenario, t: number): Point {
   for (const b of list) {
     const f = online(b, t);
     if (!f) continue;
+    const k = rentScale(b, t);
     mwAll += f * b.itMw;
-    revenueAll += f * b.revenue;
+    revenueAll += f * b.revenue * k;
     if (!b.enabled) continue;
     mw[b.ramp.tier] += f * b.itMw;
-    revenue[b.ramp.tier] += f * b.revenue;
-    noi += f * b.noi;
+    revenue[b.ramp.tier] += f * b.revenue * k;
+    noi += f * b.noi * k;
     da += (f * b.capex) / b.life;
     const d = f * b.capex * s.leverage;
     debt += d;
@@ -246,10 +272,11 @@ export interface Bridge {
  * From the AI business to the equity, using today's balance sheet.
  * Build cost already spent sits in the cash and debt figures, so only the part still to spend comes off.
  */
-export function bridge(company: Company, list: Block[], ctx: Ctx): Bridge {
+export function bridge(company: Company, list: Block[], ctx: Ctx, at: number): Bridge {
   const now = Date.parse(TODAY);
   const on = list.filter((b) => b.enabled);
-  const remaining = on.reduce((a, b) => a + b.capex * (1 - spentShare(b, now)), 0);
+  // Only capacity earning by the valuation date is in the AI value, so only its build cost comes off.
+  const remaining = on.reduce((a, b) => a + b.capex * Math.max(0, online(b, at) - spentShare(b, now)), 0);
   const lines: BridgeLine[] = [];
   const bal = company.balance;
   if (bal?.bookEquity != null) {
@@ -263,8 +290,36 @@ export function bridge(company: Company, list: Block[], ctx: Ctx): Bridge {
     lines.push({ label: "Debt", value: -bal.debt, note: bal.debtNote });
     for (const c of bal.claims ?? []) lines.push({ ...c, value: -c.value });
   }
-  lines.push({ label: "Build cost still to spend", value: -remaining, note: "On the sites switched on." });
+  lines.push({ label: "Build cost still to spend", value: -remaining, note: "On switched-on capacity running by the valuation date." });
   return { lines, net: lines.reduce((a, l) => a + l.value, 0), remaining };
+}
+
+/**
+ * Cash the AI business earns each month from today to `to`: NOI after its overhead, less tax.
+ * On the earnings basis it is also after interest on the modeled build debt, which that basis carries.
+ * On the EBITDA and cap-rate bases the actual debt comes off the balance sheet instead, so no interest here.
+ * `pv` discounts each month to today. `total` does not.
+ */
+export function interimCash(company: Company, list: Block[], s: Scenario, to: number): { pv: number; total: number } {
+  const now = Date.parse(TODAY);
+  const levered = appliedBasis(company.model, s) === "pe";
+  let pv = 0;
+  let total = 0;
+  const d = new Date(now);
+  d.setUTCDate(15);
+  d.setUTCMonth(d.getUTCMonth() + 1);
+  while (d.getTime() <= to) {
+    const t = d.getTime();
+    const p = pointAt(list, s, t);
+    const ai = aiValueAt(company, p, s);
+    const interest = levered ? p.interest : 0;
+    const tax = Math.max(0, ai.noi - p.da - interest) * s.tax;
+    const cash = (ai.noi - interest - tax) / 12;
+    total += cash;
+    pv += cash / Math.pow(1 + s.discount, (t - now) / YEAR);
+    d.setUTCMonth(d.getUTCMonth() + 1);
+  }
+  return { pv, total };
 }
 
 export interface Valuation {
@@ -272,8 +327,10 @@ export interface Valuation {
   targetDate: string;
   years: number;
   ai: AiValue;
-  /** AI business value discounted to today. */
+  /** AI business value at the target date, discounted to today. */
   aiToday: number;
+  /** Cash the AI business earns before the target date, discounted to today. */
+  interimToday: number;
   bridge: Bridge;
   /** Equity value today. */
   equity: number;
@@ -290,13 +347,14 @@ export function valuation(company: Company, list: Block[], s: Scenario, ctx: Ctx
   const ai = aiValueAt(company, target, s);
   const years = Math.max(0, (Date.parse(targetDate) - Date.parse(TODAY)) / YEAR);
   const aiToday = ai.ev / Math.pow(1 + s.discount, years);
-  const br = bridge(company, list, ctx);
-  const equity = aiToday + ai.otherValue + br.net;
+  const interim = interimCash(company, list, s, Date.parse(targetDate));
+  const br = bridge(company, list, ctx, Date.parse(targetDate));
+  const equity = aiToday + interim.pv + ai.otherValue + br.net;
   const shares = ctx.quote?.shares ? sharesAt(ctx.quote.shares, Date.parse(targetDate), s) : null;
-  const futurePrice = shares ? (ai.ev + ai.otherValue + br.net) / shares : null;
+  const futurePrice = shares ? (ai.ev + interim.total + ai.otherValue + br.net) / shares : null;
   const price = shares ? equity / shares : null;
   const upside = price != null && ctx.quote?.price ? price / ctx.quote.price - 1 : null;
-  return { target, targetDate, years, ai, aiToday, bridge: br, equity, shares, futurePrice, price, upside };
+  return { target, targetDate, years, ai, aiToday, interimToday: interim.pv, bridge: br, equity, shares, futurePrice, price, upside };
 }
 
 /** Implied value per share at each future month, before discounting. */
@@ -304,12 +362,13 @@ export function pricePath(company: Company, list: Block[], points: Point[], s: S
   const shares = ctx.quote?.shares;
   if (!shares) return [];
   const now = Date.parse(TODAY);
-  const net = bridge(company, list, ctx).net;
   return points
     .filter((p) => p.t >= now)
     .map((p) => {
       const ai = aiValueAt(company, p, s);
-      return { t: p.t, v: (ai.ev + ai.otherValue + net) / sharesAt(shares, p.t, s) };
+      const net = bridge(company, list, ctx, p.t).net;
+      const earned = interimCash(company, list, s, p.t).total;
+      return { t: p.t, v: (ai.ev + earned + ai.otherValue + net) / sharesAt(shares, p.t, s) };
     });
 }
 
@@ -331,7 +390,6 @@ export interface YearRow {
 /** Calendar-year totals, from the average of twelve monthly run-rates. */
 export function yearTable(company: Company, list: Block[], s: Scenario, ctx: Ctx): YearRow[] {
   const shares = ctx.quote?.shares ?? null;
-  const net = bridge(company, list, ctx).net;
   const rows: YearRow[] = [];
   for (let year = 2026; year <= 2030; year++) {
     let revenue = 0;
@@ -365,7 +423,7 @@ export function yearTable(company: Company, list: Block[], s: Scenario, ctx: Ctx
       exitRevenue: sumTiers(end.revenue),
       exitEarnings: endAi.earnings,
       eps: sh ? earnings / sh : null,
-      value: sh ? (endAi.ev + endAi.otherValue + net) / sh : null,
+      value: sh ? (endAi.ev + interimCash(company, list, s, end.t).total + endAi.otherValue + bridge(company, list, ctx, end.t).net) / sh : null,
     });
   }
   return rows;
@@ -395,24 +453,29 @@ export function backlog(company: Company): number {
   return Math.max(ramps, deals);
 }
 
-/** Weighted lease rate across disclosed colo rents, $ per kW-month. */
-export function disclosedLeaseRate(companies: Company[]): number {
+/**
+ * Weighted starting rent across disclosed colo leases, $ per kW-month. Disclosed figures are mostly term averages,
+ * so each is taken back to its first year at its own escalator, or the scenario's where none is disclosed.
+ */
+export function disclosedLeaseRate(companies: Company[], s: Scenario): number {
   let rev = 0;
   let mw = 0;
   for (const c of companies) {
     if (c.model !== "colo-lease" || !c.inBook) continue;
     for (const r of c.ramps) {
       if (r.revenue == null || (r.unit !== "critical-it" && r.unit !== "leased-power")) continue;
-      rev += r.revenue;
+      const first = (r.rentBasis ?? "average") === "average" ? averageFactor(r.escalator ?? s.escalator, r.termYears ?? 15) : 1;
+      rev += r.revenue / first;
       mw += r.mw;
     }
   }
   return mw ? rev / mw / 1000 / 12 : 0;
 }
 
+/** Starting rent of a block, $ per kW-month. */
 export function leaseRateOf(b: Block): number | null {
   if (!b.itMw || b.capexKind === "gpu") return null;
-  return b.revenue / b.itMw / 1000 / 12;
+  return b.revenue / b.averageFactor / b.itMw / 1000 / 12;
 }
 
 /**
@@ -421,7 +484,7 @@ export function leaseRateOf(b: Block): number | null {
  */
 export function marketMultiple(company: Company, v: Valuation, s: Scenario, ctx: Ctx): number | null {
   if (!ctx.quote?.price || !v.shares) return null;
-  const aiNeeded = (ctx.quote.price * v.shares - v.ai.otherValue - v.bridge.net) * Math.pow(1 + s.discount, v.years);
+  const aiNeeded = (ctx.quote.price * v.shares - v.interimToday - v.ai.otherValue - v.bridge.net) * Math.pow(1 + s.discount, v.years);
   const basis = appliedBasis(company.model, s);
   if (basis === "cap") return v.ai.noi > 0 && aiNeeded > 0 ? v.ai.noi / aiNeeded : null;
   if (basis === "ebitda") return v.ai.noi > 0 && aiNeeded > 0 ? aiNeeded / v.ai.noi : null;

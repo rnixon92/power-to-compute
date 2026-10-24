@@ -8,11 +8,13 @@ import type { Company, MarketBook, Tier } from "@/data/types";
 import { backlog, blocks, ctxFor, liveMw, marketMultiple, series, signedMw, sumTiers, tierMw, TODAY, valuation, type Point, type Valuation } from "@/lib/forecast";
 import { TIERS, tierLabel } from "@/lib/scenario";
 import { companyVar, hasSlot, tierVar } from "@/lib/palette";
-import { mw, mwTick, px, usdCompact, usdTick } from "@/lib/format";
+import { implied, mw, mwTick, px, UNDER_ZERO, usdCompact, usdTick } from "@/lib/format";
 import { quoteFor } from "@/lib/quotes";
 import { useHref, useScenario } from "@/components/ScenarioProvider";
 import { Delta, Segmented, Tweened } from "@/components/ui";
 import { StackedArea } from "@/components/charts/StackedArea";
+import { EventList } from "@/components/EventList";
+import { allEvents } from "@/lib/events";
 import { Sparkline } from "@/components/charts/Sparkline";
 import { UsMap, type Pin } from "@/components/charts/UsMap";
 
@@ -112,7 +114,7 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
     <main className="wrap">
       <section className="hero">
         <h1>
-          <em>{mw(totalSigned)}</em> of AI capacity signed across {showIren ? "ten former bitcoin miners" : "nine landlords"}.
+          <em>{mw(totalSigned)}</em> signed to AI.
         </h1>
         <p className="lede">
           Every campus, lease and build cost, with a forecast you can change. Switch sites in or out, set the lease rate and multiple, and every valuation updates.
@@ -266,7 +268,7 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
                       <td className="r">{r.signed ? mw(r.signed) : "—"}</td>
                       <td className="r">{r.cap && r.signed ? usdCompact(r.cap / r.signed) : "—"}</td>
                       <td className="r">{usdCompact(sumTiers(r.value.target.revenue))}</td>
-                      <td className="r"><b>{r.value.price != null && r.value.price > 0 ? px(r.value.price) : "—"}</b></td>
+                      <td className="r"><b title={r.value.price != null && r.value.price <= 0 ? UNDER_ZERO : undefined}>{implied(r.value.price)}</b></td>
                       <td className="r">{r.value.price != null && r.value.price > 0 ? <Delta value={(r.value.upside ?? 0) * 100} digits={0} /> : <span className="muted" title="Debt, claims and build cost still to spend exceed the value in this scenario">below zero</span>}</td>
                       <td className="r">{formatMarket(r.multiple, scenario.basis, r.company.model)}</td>
                     </tr>
@@ -311,6 +313,15 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
             <p>Forecasts put US data-center electricity at 2–4.5× its 2024 level by 2030. <Link className="link" href={href("/demand")}>See every study side by side</Link>.</p>
           </div>
         </div>
+      </section>
+      <section className="section">
+        <div className="section-head">
+          <div>
+            <h2>What changed lately</h2>
+            <p>Leases, financings, deliveries and power, newest first, with how each stock moved over the next five trading days.</p>
+          </div>
+        </div>
+        <EventList events={allEvents(shown.map((r) => r.company))} market={market} limit={8} showTicker />
       </section>
       <style>{`@media (max-width: 1000px) { .rv-grid { grid-template-columns: 1fr !important; } }`}</style>
     </main>
@@ -357,7 +368,7 @@ function ProviderCard({ row, market, href, year }: { row: Row; market: MarketBoo
       <div className="pcard-foot">
         <div>
           <span className="eyebrow">Implied today</span>
-          <b>{value.price != null && value.price > 0 ? px(value.price) : "—"}</b>{" "}
+          <b title={value.price != null && value.price <= 0 ? UNDER_ZERO : undefined}>{implied(value.price)}</b>{" "}
           {value.price != null && value.price > 0 ? <Delta value={(value.upside ?? 0) * 100} digits={0} /> : null}
         </div>
         <div>
