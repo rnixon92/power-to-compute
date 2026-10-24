@@ -17,6 +17,8 @@ import { EventList } from "@/components/EventList";
 import { allEvents } from "@/lib/events";
 import { Sparkline } from "@/components/charts/Sparkline";
 import { UsMap, type Pin } from "@/components/charts/UsMap";
+import { BuildCalendar } from "@/components/BuildCalendar";
+import { calendar } from "@/lib/calendar";
 
 interface Row {
   company: Company;
@@ -65,7 +67,9 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
   const pick = (p: Point) => (metric === "mw" ? sumTiers(p.mw) : sumTiers(p.revenue));
   const slotted = shown.filter((r) => hasSlot(r.company.ticker));
   const rest = shown.filter((r) => !hasSlot(r.company.ticker));
-  const restLabel = rest.map((r) => r.company.ticker).join(", ");
+  // Name only the gray companies that put capacity on the chart under this scenario.
+  const restDrawn = rest.filter((r) => r.points.some((p) => pick(p) > 0));
+  const restLabel = (restDrawn.length ? restDrawn : rest).map((r) => r.company.ticker).join(", ");
   const layers = [
     ...slotted.map((r) => ({ key: r.company.ticker, label: r.company.ticker, color: companyVar(r.company.ticker), values: r.points.map(pick) })),
     ...(rest.length
@@ -80,6 +84,8 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
   const totalCap = shown.reduce((a, r) => a + (r.cap ?? 0), 0);
   const targetRevenue = shown.reduce((a, r) => a + sumTiers(r.value.target.revenue), 0);
   const openMw = shown.reduce((a, r) => a + r.tiers.announced + r.tiers.pipeline, 0);
+  const shownCompanies = useMemo(() => shown.map((r) => r.company), [shown]);
+  const soon = useMemo(() => calendar(shownCompanies, scenario).counts.slice(0, 2).reduce((a, n) => a + n, 0), [shownCompanies, scenario]);
 
   const sorted = [...shown].sort((a, b) => {
     const v = (r: Row): number | string => {
@@ -201,6 +207,16 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
             />
           </div>
         </div>
+      </section>
+
+      <section className="section">
+        <div className="section-head">
+          <div>
+            <h2>Build calendar</h2>
+            <p>{soon} go-lives in this quarter and next across the sites you have switched on. The shaded column is this quarter, and the dates move with the delay setting in Assumptions.</p>
+          </div>
+        </div>
+        <BuildCalendar companies={shownCompanies} />
       </section>
 
       <section className="section">

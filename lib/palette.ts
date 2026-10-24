@@ -1,11 +1,12 @@
 import type { Tier } from "@/data/types";
 
 /**
- * Categorical slots, fixed order. The holdings that matter most take the first three.
- * The palette has eight hues that stay distinct for colorblind readers. Companies past
- * the eighth share a neutral gray and are always shown with their ticker beside the mark.
+ * Categorical slots, fixed order. The holdings that matter most take the first three, then
+ * the largest signed books. The palette has eight hues that stay distinct for colorblind readers.
+ * Gray is for power with no signed AI lease (MARA) and for CLSK, the smallest signed book, which
+ * shares the gray band in the stacked chart. Gray marks always carry their ticker.
  */
-export const SLOT_ORDER = ["IREN", "WULF", "GLXY", "CORZ", "CIFR", "APLD", "HUT", "MARA"];
+export const SLOT_ORDER = ["IREN", "WULF", "GLXY", "CORZ", "CIFR", "APLD", "HUT", "RIOT"];
 
 export function hasSlot(ticker: string): boolean {
   return SLOT_ORDER.includes(ticker);
