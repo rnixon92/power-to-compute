@@ -158,7 +158,7 @@ export function scenarioChip(s: Scenario): { main: string; scope: string } {
   const main = s.basis === "dcf"
     ? `Lease DCF ${pctOf(s.dcfRate)}`
     : s.basis === "cap"
-      ? `${pctOf(s.capRate)} cap · ${s.year}`
+      ? `${pctOf(s.capRate)} cap rate`
       : s.basis === "pe"
         ? `${s.multiple}× · ${s.year}`
         : `${s.multiple}× EBITDA · ${s.year}`;
@@ -180,7 +180,7 @@ export function methodLine(model: ModelKind, s: Scenario): { label: string; deta
   const basis = appliedBasis(model, s);
   if (model === "gpu-cloud") return { label: `${s.multiple}× earnings, end ${s.year}`, detail: "GPU cloud runs on contracts of about five years, so it is valued on earnings under every method." };
   if (basis === "dcf") return { label: `Lease DCF at ${pctOf(s.dcfRate)}`, detail: `Rent over each lease, discounted at ${pctOf(s.dcfRate)}, with sites sold at a ${pctOf(s.exitCap)} cap rate in 2050.` };
-  if (basis === "cap") return { label: `${pctOf(s.capRate)} cap rate, end ${s.year}`, detail: `NOI at the end of ${s.year} capitalized at ${pctOf(s.capRate)}, after debt.` };
+  if (basis === "cap") return { label: `${pctOf(s.capRate)} cap rate`, detail: `Each site's average NOI over its lease, capitalized at ${pctOf(s.capRate)} once fully online and discounted at ${pctOf(s.dcfRate)}.` };
   return { label: `${s.multiple}× ${basis === "pe" ? "earnings" : "EBITDA"}, end ${s.year}`, detail: `The end-${s.year} run-rate at ${s.multiple}× ${basis === "pe" ? "earnings" : "EBITDA"}, discounted to today.` };
 }
 

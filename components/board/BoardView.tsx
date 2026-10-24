@@ -210,7 +210,7 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
             <p>{scenario.basis === "dcf"
               ? <>Landlords are valued on every month of rent over each lease&apos;s life, discounted at {(scenario.dcfRate * 100).toFixed(1).replace(/\.0$/, "")}%, plus the balance sheet.{showIren ? <> IREN stays on {scenario.multiple}× earnings.</> : null}</>
               : scenario.basis === "cap"
-              ? <>Landlords are the end-{scenario.year} NOI at a {(scenario.capRate * 100).toFixed(1)}% cap rate, after debt, discounted to today.{showIren ? <> IREN stays on {scenario.multiple}× earnings.</> : null}</>
+              ? <>Landlords are each site&apos;s average NOI over its lease at a {(scenario.capRate * 100).toFixed(1)}% cap rate, less build cost, plus the balance sheet.{showIren ? <> IREN stays on {scenario.multiple}× earnings.</> : null}</>
               : <>Implied price is the end-{scenario.year} run-rate at {scenario.multiple}× {scenario.basis === "pe" ? "earnings" : "EBITDA"}, discounted to today.</>} Open a company for the site-by-site breakdown.</p>
           </div>
         </div>
@@ -235,7 +235,7 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
             <p>What the market pays for each signed megawatt, and what your scenario says each share is worth. {scenario.basis === "dcf"
               ? <>The last column is the annual return today&apos;s price implies on the leases. Your scenario asks for {(scenario.dcfRate * 100).toFixed(1).replace(/\.0$/, "")}%.{showIren ? " IREN stays on an earnings multiple." : null}</>
               : scenario.basis === "cap"
-              ? <>The last column is the cap rate today&apos;s price implies. Your scenario uses {(scenario.capRate * 100).toFixed(1)}%.{showIren ? " IREN stays on an earnings multiple." : null}</>
+              ? <>The last column is the cap rate today&apos;s price implies on stabilized NOI. Your scenario uses {(scenario.capRate * 100).toFixed(1)}%.{showIren ? " IREN stays on an earnings multiple." : null}</>
               : <>The last column is the {scenario.basis === "pe" ? "earnings" : "EBITDA"} multiple today&apos;s price implies. Your scenario uses {scenario.multiple}×.</>}{showIren ? " IREN is a GPU cloud, so its dollars per megawatt measure compute sales and sit apart from the leases." : null}</p>
           </div>
           <Segmented label="Valuation year" value={scenario.year} onChange={(y) => set({ year: y })} options={[2026, 2027, 2028, 2029, 2030].map((y) => ({ value: y, label: String(y) }))} />

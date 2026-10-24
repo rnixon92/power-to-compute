@@ -114,7 +114,7 @@ export function ProviderView({ company, market, states, pins, mapSize }: { compa
               <div className="fc-head">
                 <div>
                   <h2>Price, capacity and revenue on one timeline</h2>
-                  <p className="note" style={{ marginTop: 2 }}>{scenario.basis === "dcf" && company.model !== "gpu-cloud" ? "The dashed line is today's value growing at your required return, which is what a fairly priced share should do." : "The dashed line is what the run-rate is worth each month under your scenario, before discounting."}</p>
+                  <p className="note" style={{ marginTop: 2 }}>{(scenario.basis === "dcf" || scenario.basis === "cap") && company.model !== "gpu-cloud" ? "The dashed line is today's value growing at your required return, which is what a fairly priced share should do." : "The dashed line is what the run-rate is worth each month under your scenario, before discounting."}</p>
                 </div>
               </div>
               <ForecastChart

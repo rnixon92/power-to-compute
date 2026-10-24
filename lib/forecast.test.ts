@@ -105,7 +105,8 @@ describe("forecast", () => {
     expect(ev.ai.ev).toBeCloseTo(ev.ai.noi * s.multiple, 0);
     const cap = { ...run, basis: "cap" as const, capRate: 0.075 };
     const c = valuation(hut, blocks(hut, cap), cap, ctx);
-    expect(c.ai.ev).toBeCloseTo(c.ai.noi / 0.075, 0);
+    expect(c.nav).toBeDefined();
+    expect(c.aiToday).toBeCloseTo(c.nav!.sites + c.nav!.rampCash - c.nav!.capex - c.nav!.overhead, 0);
     const iren = companyByTicker("IREN")!;
     const i = valuation(iren, blocks(iren, cap), cap, ctx);
     expect(i.ai.ev).toBeCloseTo(i.ai.earnings * cap.multiple + i.target.debt, 0);
@@ -240,6 +241,31 @@ describe("lease DCF", () => {
   });
 });
 
+describe("cap rate on stabilized NOI", () => {
+  const cap = { ...s, basis: "cap" as const, capRate: 0.07 };
+
+  it("capitalizes each lease's average NOI, so a disclosed average comes through whole", () => {
+    // Galaxy's two signed phases with disclosed rent, at their disclosed 90% margin.
+    const glxy = companyByTicker("GLXY")!;
+    const only = { ...cap, off: ["glxy-3"] };
+    const v = valuation(glxy, blocks(glxy, only), only, ctx);
+    expect(v.nav!.stabilizedNoi).toBeCloseTo((315e6 + 690e6) * 0.9, -3);
+  });
+
+  it("does not depend on the valuation year", () => {
+    const wulf = companyByTicker("WULF")!;
+    const a = valuation(wulf, blocks(wulf, { ...cap, year: 2027 }), { ...cap, year: 2027 }, ctx).price!;
+    const b = valuation(wulf, blocks(wulf, { ...cap, year: 2030 }), { ...cap, year: 2030 }, ctx).price!;
+    expect(a).toBeCloseTo(b, 6);
+  });
+
+  it("rises as the cap rate falls", () => {
+    const hut = companyByTicker("HUT")!;
+    const low = { ...cap, capRate: 0.06 };
+    expect(valuation(hut, blocks(hut, low), low, ctx).price!).toBeGreaterThan(valuation(hut, blocks(hut, cap), cap, ctx).price!);
+  });
+});
+
 describe("chance unsigned power gets leased", () => {
   const wulf = companyByTicker("WULF")!;
   const price = (odds: number, on: string[] = ["wulf-muskie-1", "wulf-muskie-2"]) => {
@@ -331,7 +357,7 @@ describe("explaining the price", () => {
   });
 
   it("prices Muskie as upside that grows once it is built", () => {
-    const early = { ...s, basis: "cap" as const, year: 2028 };
+    const early = { ...s, basis: "ebitda" as const, year: 2028 };
     const rows = upside(companyByTicker("WULF")!, early, ctx);
     const m1 = rows.find((r) => r.block.ramp.id === "wulf-muskie-1")!;
     expect(m1.builtYear).toBe(2029);

@@ -420,6 +420,8 @@ export interface Valuation {
   bridge: Bridge;
   /** Set on the lease DCF basis. */
   dcf?: Dcf;
+  /** Set on the cap-rate basis. */
+  nav?: Nav;
   /** Equity value today. */
   equity: number;
   shares: number | null;
@@ -430,7 +432,9 @@ export interface Valuation {
 }
 
 export function valuation(company: Company, list: Block[], s: Scenario, ctx: Ctx): Valuation {
-  if (appliedBasis(company.model, s) === "dcf") return dcfValuation(company, list, s, ctx, s.dcfRate);
+  const basis = appliedBasis(company.model, s);
+  if (basis === "dcf") return dcfValuation(company, list, s, ctx, s.dcfRate);
+  if (basis === "cap") return capValuation(company, list, s, ctx, s.capRate);
   const targetDate = `${s.year}-12-31`;
   const target = pointAt(list, s, Date.parse(targetDate));
   const ai = aiValueAt(company, target, s);
@@ -463,13 +467,79 @@ function dcfValuation(company: Company, list: Block[], s: Scenario, ctx: Ctx, r:
   return { target, targetDate, years: 0, ai, aiToday, interimToday: 0, bridge: br, dcf, equity, shares, futurePrice: price, price, upside };
 }
 
+/** What the cap-rate basis adds up, all discounted to today. */
+export interface Nav {
+  /** Each site at its stabilized NOI divided by the cap rate, from the date it is fully online. */
+  sites: number;
+  /** NOI earned while each site ramps up, before it is stabilized. */
+  rampCash: number;
+  /** Build cost as it is spent. */
+  capex: number;
+  /** The AI business's share of overhead, capitalized at the same cap rate. */
+  overhead: number;
+  /** Annual NOI of the switched-on sites once stabilized, averaged over each lease. */
+  stabilizedNoi: number;
+}
+
+/**
+ * NAV at a cap rate. Each site's stabilized NOI, its average over the lease with escalators, is capitalized
+ * when the site is fully online and discounted from then at the required return. Build cost comes off as it
+ * is spent, NOI during the ramp is added, and overhead is capitalized at the same rate. Pre-tax, as cap rates are.
+ */
+export function capNav(company: Company, list: Block[], s: Scenario, cap: number): Nav {
+  const now = Date.parse(TODAY);
+  const r = s.dcfRate;
+  const df = (t: number) => Math.pow(1 + r, Math.max(0, t - now) / YEAR);
+  let sites = 0;
+  let rampCash = 0;
+  let capex = 0;
+  let stabilizedNoi = 0;
+  for (const b of list.filter((x) => x.enabled)) {
+    const term = b.ramp.termYears ?? 15;
+    const avgNoi = (b.weight * b.noi * averageFactor(b.escalator, term)) / b.averageFactor;
+    stabilizedNoi += avgNoi;
+    sites += avgNoi / cap / df(Math.max(now, b.full));
+    for (let t = Math.max(now, b.start); t < b.full; t = nextMonth(t)) {
+      rampCash += (b.weight * b.noi * online(b, t) * rentScale(b, t)) / 12 / df(t);
+    }
+    const from = new Date(b.start);
+    from.setUTCMonth(from.getUTCMonth() - BUILD_LEAD);
+    for (let t = Math.max(now, from.getTime()); t < b.full; t = nextMonth(t)) {
+      capex += (b.weight * b.capex * (spentShare(b, nextMonth(t)) - spentShare(b, t))) / df(t);
+    }
+  }
+  const gp = Math.max(0, company.balance?.other?.grossProfit ?? 0);
+  const aiShare = stabilizedNoi > 0 ? stabilizedNoi / (stabilizedNoi + gp) : gp > 0 ? 0 : 1;
+  const overhead = (overheadOf(company, s) * aiShare) / cap;
+  return { sites, rampCash, capex, overhead, stabilizedNoi };
+}
+
+function capValuation(company: Company, list: Block[], s: Scenario, ctx: Ctx, cap: number, nav?: Nav): Valuation {
+  const targetDate = `${s.year}-12-31`;
+  const target = pointAt(list, s, Date.parse(targetDate));
+  const n = nav ?? capNav(company, list, s, cap);
+  // The other businesses carry the overhead the AI business does not.
+  const gp = Math.max(0, company.balance?.other?.grossProfit ?? 0);
+  const overheadOther = overheadOf(company, s) - n.overhead * cap;
+  const ai = { ...aiValueAt(company, target, s), otherValue: s.otherMultiple * Math.max(0, gp - overheadOther) };
+  const full = bridge(company, list, ctx, DCF_END);
+  const lines = full.lines.filter((l) => l.label !== "Build cost still to spend");
+  const br: Bridge = { lines, net: lines.reduce((a, l) => a + l.value, 0), remaining: 0 };
+  const aiToday = n.sites + n.rampCash - n.capex - n.overhead;
+  const equity = aiToday + ai.otherValue + br.net;
+  const shares = ctx.quote?.shares ? sharesAt(ctx.quote.shares, Date.parse(targetDate), s) : null;
+  const price = shares ? equity / shares : null;
+  const upside = price != null && ctx.quote?.price ? price / ctx.quote.price - 1 : null;
+  return { target, targetDate, years: 0, ai, aiToday, interimToday: 0, bridge: br, nav: n, equity, shares, futurePrice: price, price, upside };
+}
+
 /** Implied value per share at each future month, before discounting. */
 export function pricePath(company: Company, list: Block[], points: Point[], s: Scenario, ctx: Ctx): { t: number; v: number }[] {
   const shares = ctx.quote?.shares;
   if (!shares) return [];
   const now = Date.parse(TODAY);
-  if (appliedBasis(company.model, s) === "dcf") {
-    // With no dividends, a DCF value grows at the return it is discounted at.
+  if (appliedBasis(company.model, s) === "dcf" || appliedBasis(company.model, s) === "cap") {
+    // With no dividends, a value built from discounted cash grows at the return it is discounted at.
     const today = valuation(company, list, s, ctx).price ?? 0;
     return points.filter((p) => p.t >= now).map((p) => ({ t: p.t, v: today * Math.pow(1 + s.dcfRate, (p.t - now) / YEAR) }));
   }
@@ -501,7 +571,7 @@ export interface YearRow {
 /** Calendar-year totals, from the average of twelve monthly run-rates. */
 export function yearTable(company: Company, list: Block[], s: Scenario, ctx: Ctx): YearRow[] {
   const shares = ctx.quote?.shares ?? null;
-  const dcfPrice = appliedBasis(company.model, s) === "dcf" ? valuation(company, list, s, ctx).price : null;
+  const dcfPrice = appliedBasis(company.model, s) === "dcf" || appliedBasis(company.model, s) === "cap" ? valuation(company, list, s, ctx).price : null;
   const rows: YearRow[] = [];
   for (let year = 2026; year <= 2030; year++) {
     let revenue = 0;
@@ -599,6 +669,7 @@ export function leaseRateOf(b: Block): number | null {
 export function marketMultiple(company: Company, v: Valuation, s: Scenario, ctx: Ctx): number | null {
   if (!ctx.quote?.price || !v.shares) return null;
   if (appliedBasis(company.model, s) === "dcf") return impliedReturn(company, s, ctx);
+  if (appliedBasis(company.model, s) === "cap") return impliedCap(company, s, ctx);
   const aiNeeded = (ctx.quote.price * v.shares - v.interimToday - v.ai.otherValue - v.bridge.net) * Math.pow(1 + s.discount, v.years);
   const basis = appliedBasis(company.model, s);
   if (basis === "cap") return v.ai.noi > 0 && aiNeeded > 0 ? v.ai.noi / aiNeeded : null;
@@ -619,6 +690,23 @@ export function impliedReturn(company: Company, s: Scenario, ctx: Ctx): number |
   const at = (r: number) => dcfValuation(company, list, s, ctx, r, flows).price ?? NaN;
   let lo = 0.01;
   let hi = 0.4;
+  if (!(at(lo) >= target) || !(at(hi) <= target)) return null;
+  for (let i = 0; i < 30; i++) {
+    const mid = (lo + hi) / 2;
+    if (at(mid) > target) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+/** The cap rate at which the stabilized NAV lands on today's price. Value falls as the cap rate rises. */
+export function impliedCap(company: Company, s: Scenario, ctx: Ctx): number | null {
+  const target = ctx.quote?.price;
+  if (!target) return null;
+  const list = blocks(company, s);
+  const at = (c: number) => capValuation(company, list, s, ctx, c).price ?? NaN;
+  let lo = 0.02;
+  let hi = 0.25;
   if (!(at(lo) >= target) || !(at(hi) <= target)) return null;
   for (let i = 0; i < 30; i++) {
     const mid = (lo + hi) / 2;

@@ -66,7 +66,7 @@ export function Assumptions({ btc }: { btc: { price: number; asOf: string } | nu
   const methodSummary = s.basis === "dcf"
     ? `Lease DCF · ${rate(s.dcfRate)} return · ${rate(s.exitCap)} exit`
     : s.basis === "cap"
-      ? `${rate(s.capRate, 1)} cap rate · end ${s.year}`
+      ? `${rate(s.capRate, 1)} cap rate · ${rate(s.dcfRate)} return`
       : `${s.multiple}× ${s.basis === "pe" ? "earnings" : "EBITDA"} · end ${s.year}`;
 
   return (
@@ -101,14 +101,16 @@ export function Assumptions({ btc }: { btc: { price: number; asOf: string } | nu
               <Slider label="Required return" value={s.dcfRate} min={0.05} max={0.14} step={0.0025} format={(v) => rate(v)} hint="Investment-grade project debt here costs 6–7.75%. Equity asks more." onChange={(v) => set({ dcfRate: v })} />
               <Slider label="Exit cap rate, 2050" value={s.exitCap} min={0.05} max={0.1} step={0.0025} format={(v) => rate(v)} hint="What a powered, leased site sells for at the end. Higher is more cautious." onChange={(v) => set({ exitCap: v })} />
             </>
+          ) : s.basis === "cap" ? (
+            <>
+              <p className="note">Each site&apos;s average NOI over its lease, divided by the cap rate once the site is fully online, less build cost as it is spent. Pre-tax, like a property valuation.</p>
+              <Slider label="Cap rate" value={s.capRate} min={0.05} max={0.12} step={0.001} format={(v) => rate(v, 1)} hint="Morgan Stanley uses 6.7% for Hut 8. Today's prices imply about 10% for most of the group." onChange={(v) => set({ capRate: v })} />
+              <Slider label="Required return" value={s.dcfRate} min={0.05} max={0.14} step={0.0025} format={(v) => rate(v)} hint="Brings each site's value back from the date it is fully online." onChange={(v) => set({ dcfRate: v })} />
+            </>
           ) : (
             <>
-              <p className="note">One year&apos;s run-rate, valued and brought back to today with the cash earned before then. A quick cross-check on the lease DCF.</p>
-              {s.basis === "cap" ? (
-                <Slider label="Cap rate" value={s.capRate} min={0.05} max={0.1} step={0.001} format={(v) => rate(v, 1)} hint="Morgan Stanley uses 6.7% as the exit rate on Hut 8." onChange={(v) => set({ capRate: v })} />
-              ) : (
-                <Slider label="Multiple" value={s.multiple} min={6} max={40} format={(v) => `${v}×`} onChange={(v) => set({ multiple: v })} />
-              )}
+              <p className="note">One year&apos;s run-rate, valued and brought back to today with the cash earned before then. A quick cross-check.</p>
+              <Slider label="Multiple" value={s.multiple} min={6} max={40} format={(v) => `${v}×`} onChange={(v) => set({ multiple: v })} />
               <YearPicker value={s.year} onChange={(y) => set({ year: y })} />
               <Slider label="Discount rate" value={s.discount} min={0} max={0.2} step={0.005} format={(v) => rate(v, 1)} onChange={(v) => set({ discount: v })} />
             </>

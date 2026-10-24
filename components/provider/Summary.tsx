@@ -44,7 +44,7 @@ export function Summary({ company, ctx, value, multiple }: { company: Company; c
   const shown = all ? rows : rows.slice(0, SHOWN);
   // Once every site is built by the valuation year, "now" and "once built" are the same number.
   // On the lease DCF the valuation year does not apply, so there is one figure per site.
-  const later = basis !== "dcf" && rows.some((r) => r.builtYear !== s.year);
+  const later = basis !== "dcf" && basis !== "cap" && rows.some((r) => r.builtYear !== s.year);
   const years = useMemo(() => priceByYear(company, s, ctx), [company, s, ctx]);
 
   return (
@@ -77,13 +77,13 @@ export function Summary({ company, ctx, value, multiple }: { company: Company; c
             {multiple != null && basis === "dcf"
               ? <>Put another way, today&apos;s price implies these leases return <b>{(multiple * 100).toFixed(1)}%</b> a year, with the balance sheet as it is. Your scenario asks for {(s.dcfRate * 100).toFixed(1).replace(/\.0$/, "")}%.</>
               : multiple != null && basis === "cap"
-              ? <>Today&apos;s price implies a <b>{(multiple * 100).toFixed(1)}%</b> cap rate on the end-{s.year} NOI after overhead, with the balance sheet as it is. Your scenario uses {(s.capRate * 100).toFixed(1)}%.</>
+              ? <>Put another way, today&apos;s price implies a <b>{(multiple * 100).toFixed(1)}%</b> cap rate on stabilized NOI, with the balance sheet as it is. Your scenario uses {(s.capRate * 100).toFixed(1)}%.</>
               : multiple != null
                 ? <>Put another way, today&apos;s price pays <b>{multiple.toFixed(1)}×</b> {basisWord} at the end-{s.year} run-rate, with the balance sheet as it is. Your scenario uses {s.multiple}×.</>
                 : <>Earnings after overhead are negative at the end of {s.year} in your scenario, so there&apos;s no market multiple to compare.</>}
           </p>
         ) : null}
-        {basis !== "dcf" ? <div className="year-row">
+        {basis !== "dcf" && basis !== "cap" ? <div className="year-row">
           <span className="note">Implied today, valuing the run-rate at the end of</span>
           <div className="year-strip" role="radiogroup" aria-label="Valuation year">
             {years.map((y) => (
@@ -97,7 +97,7 @@ export function Summary({ company, ctx, value, multiple }: { company: Company; c
         {rows.length ? (
           <p>
             <b>Not in this price:</b> {mw(offMw)} of power with no tenant yet or held as a future option.
-            {allOn != null && allOn > 0 ? <> {gpu ? "At your GPU rate" : "Leased at your rate"}{s.leaseOdds < 1 ? ` with a ${Math.round(s.leaseOdds * 100)}% chance of signing` : ""}, all of it would add about <b>{px(allOn)}</b> a share once built{basis === "dcf" ? ", valued over each lease" : `, valued at the end of ${lastYear}`}.</> : null}
+            {allOn != null && allOn > 0 ? <> {gpu ? "At your GPU rate" : "Leased at your rate"}{s.leaseOdds < 1 ? ` with a ${Math.round(s.leaseOdds * 100)}% chance of signing` : ""}, all of it would add about <b>{px(allOn)}</b> a share once built{basis === "dcf" || basis === "cap" ? ", valued over each lease" : `, valued at the end of ${lastYear}`}.</> : null}
           </p>
         ) : (
           <p className="muted">Every site in the ledger is switched on.</p>
@@ -113,7 +113,7 @@ export function Summary({ company, ctx, value, multiple }: { company: Company; c
                   <th>Site</th>
                   <th className="r">IT capacity</th>
                   <th>Fully online</th>
-                  <th className="r">{later ? `Adds, end ${s.year}` : basis === "dcf" ? "Adds to the price" : `Adds to the end-${s.year} price`}</th>
+                  <th className="r">{later ? `Adds, end ${s.year}` : basis === "dcf" || basis === "cap" ? "Adds to the price" : `Adds to the end-${s.year} price`}</th>
                   {later ? <th className="r">Adds once built</th> : null}
                   <th className="r"><span className="sr">Switch</span></th>
                 </tr>
@@ -178,11 +178,15 @@ export function PriceBridge({ company, value }: { company: Company; value: Valua
     <div className="card card-pad" style={{ marginTop: 14 }}>
       <div className="bridge-cols">
         <div>
-          <div className="eyebrow">{basis === "dcf" ? `The AI business, run-rate at end ${s.year} and lease value` : `The AI business, end ${s.year}`}</div>
+          <div className="eyebrow">{basis === "dcf" ? `The AI business, run-rate at end ${s.year} and lease value` : basis === "cap" ? "The AI business, site by site at a cap rate" : `The AI business, end ${s.year}`}</div>
           <div className="bridge" style={{ marginTop: 8 }}>
-            <div><span>Revenue run-rate</span><b>{usdCompact(revenue)}</b></div>
-            <div><span>{gpu ? "Project EBITDA" : "NOI"}{revenue ? ` · ${Math.round((t.noi / revenue) * 100)}%` : ""}</span><b>{usdCompact(t.noi)}</b></div>
-            <div><span>Overhead, its share</span><b>−{usdCompact(ai.overheadAi)}</b></div>
+            {basis !== "cap" ? (
+              <>
+              <div><span>Revenue run-rate</span><b>{usdCompact(revenue)}</b></div>
+              <div><span>{gpu ? "Project EBITDA" : "NOI"}{revenue ? ` · ${Math.round((t.noi / revenue) * 100)}%` : ""}</span><b>{usdCompact(t.noi)}</b></div>
+              <div><span>Overhead, its share</span><b>−{usdCompact(ai.overheadAi)}</b></div>
+              </>
+            ) : null}
             {basis === "dcf" && value.dcf ? (
               <>
                 <div title="Each month to 2050, after overhead and tax, discounted at your required return."><span>Lease cash flows to 2050</span><b>{usdCompact(value.dcf.operating)}</b></div>
@@ -197,19 +201,25 @@ export function PriceBridge({ company, value }: { company: Company; value: Valua
                 <div><span>Tax</span><b>−{usdCompact(tax)}</b></div>
                 <div className="total"><span>Earnings × {s.multiple}, plus that build debt</span><b>{usdCompact(ai.ev)}</b></div>
               </>
-            ) : basis === "cap" ? (
-              <div className="total"><span>NOI ÷ {(s.capRate * 100).toFixed(1)}% cap rate</span><b>{usdCompact(ai.ev)}</b></div>
+            ) : basis === "cap" && value.nav ? (
+              <>
+                <div title="Each lease's NOI averaged over its term, with escalators, at your chance of leasing for unsigned sites."><span>Stabilized NOI a year</span><b>{usdCompact(value.nav.stabilizedNoi)}</b></div>
+                <div title="Each site's stabilized NOI divided by the cap rate, from the date it is fully online."><span>Sites at a {(s.capRate * 100).toFixed(1)}% cap rate</span><b>{usdCompact(value.nav.sites)}</b></div>
+                <div><span>NOI while sites ramp up</span><b>+{usdCompact(value.nav.rampCash)}</b></div>
+                <div><span>Build cost as it is spent</span><b>−{usdCompact(value.nav.capex)}</b></div>
+                <div><span>Overhead at the same cap rate</span><b>−{usdCompact(value.nav.overhead)}</b></div>
+              </>
             ) : (
               <div className="total"><span>NOI × {s.multiple}</span><b>{usdCompact(ai.ev)}</b></div>
             )}
-            <div className="total"><span>{basis === "dcf" ? `Value today at ${(s.dcfRate * 100).toFixed(1)}%` : `Discounted ${value.years.toFixed(1)} years at ${(s.discount * 100).toFixed(1)}%`}</span><b>{usdCompact(value.aiToday)}</b></div>
+            <div className="total"><span>{basis === "dcf" || basis === "cap" ? `Value today at ${(s.dcfRate * 100).toFixed(1)}%` : `Discounted ${value.years.toFixed(1)} years at ${(s.discount * 100).toFixed(1)}%`}</span><b>{usdCompact(value.aiToday)}</b></div>
           </div>
         </div>
         <div>
           <div className="eyebrow">The rest of the company{asOf ? `, balance sheet at ${isoToLabel(asOf)}` : ""}</div>
           <div className="bridge" style={{ marginTop: 8 }}>
             <div><span>AI business today</span><b>{usdCompact(value.aiToday)}</b></div>
-            {basis !== "dcf" ? <div title="NOI after overhead and tax from now until the valuation date, each month discounted to today."><span>Cash it earns before end {s.year}</span><b>+{usdCompact(value.interimToday)}</b></div> : null}
+            {basis !== "dcf" && basis !== "cap" ? <div title="NOI after overhead and tax from now until the valuation date, each month discounted to today."><span>Cash it earns before end {s.year}</span><b>+{usdCompact(value.interimToday)}</b></div> : null}
             {company.balance?.other ? (
               <div title={company.balance.other.note}><span>{company.balance.other.label}, {s.otherMultiple}× gross profit after its overhead</span><b>{usdCompact(ai.otherValue)}</b></div>
             ) : null}
