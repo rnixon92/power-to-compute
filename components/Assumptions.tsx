@@ -81,7 +81,7 @@ export function Assumptions({ btc }: { btc: { price: number; asOf: string } | nu
           <TierToggles ramps={ramps} />
           <Slider label="Chance unsigned power gets leased" value={s.leaseOdds} min={0} max={1} step={0.05} format={(v) => `${Math.round(v * 100)}%`} hint="For sites with no tenant yet and future options you switch on. Their rent and build cost both count at this share, so each adds its expected value." onChange={(v) => set({ leaseOdds: v })} />
           <div className="slider-top"><span>Value landlords on</span></div>
-          <Segmented label="Valuation basis" size="sm" value={s.basis} onChange={(b) => set({ basis: b })} options={[{ value: "dcf", label: "Lease DCF" }, { value: "pe", label: "Earnings" }, { value: "ebitda", label: "EBITDA" }, { value: "cap", label: "Cap rate" }]} />
+          <Segmented label="Valuation basis" size="sm" value={s.basis} onChange={(b) => set({ basis: b })} options={[{ value: "dcf", label: "Lease DCF" }, { value: "cap", label: "Cap rate" }, { value: "pe", label: "Earnings" }, { value: "ebitda", label: "EBITDA" }]} />
           {s.basis === "dcf" ? (
             <>
               <p className="note">Every month of rent over each lease&apos;s life, after overhead and tax, less build cost when it is spent, with each site sold at the exit cap rate in 2050. The valuation year does not apply.</p>
@@ -90,7 +90,7 @@ export function Assumptions({ btc }: { btc: { price: number; asOf: string } | nu
             </>
           ) : null}
           {s.basis === "cap" ? (
-            <Slider label="Cap rate" value={s.capRate} min={0.05} max={0.1} step={0.001} format={(v) => `${(v * 100).toFixed(1)}%`} hint="Morgan Stanley's terminal rate on Hut 8 is 6.7%. A higher cap rate is a lower price. The default here is 7.5%." onChange={(v) => set({ capRate: v })} />
+            <Slider label="Cap rate" value={s.capRate} min={0.05} max={0.1} step={0.001} format={(v) => `${(v * 100).toFixed(1)}%`} hint="One year of NOI capitalized, a quick and cautious cross-check on the lease DCF. Morgan Stanley uses 6.7% as the exit rate on Hut 8." onChange={(v) => set({ capRate: v })} />
           ) : null}
           <Slider label={s.basis === "cap" || s.basis === "dcf" ? "IREN earnings multiple" : "Multiple"} value={s.multiple} min={6} max={40} format={(v) => `${v}×`} hint={s.basis === "cap" || s.basis === "dcf" ? "IREN sells compute on short contracts, so it stays on earnings." : undefined} onChange={(v) => set({ multiple: v })} />
           <Slider label="Delay on future deliveries" value={s.slip} min={0} max={24} format={(v) => (v ? `${v} months` : "On schedule")} onChange={(v) => set({ slip: v })} />
