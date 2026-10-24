@@ -122,7 +122,7 @@ export function Assumptions({ btc }: { btc: { price: number; asOf: string } | nu
           <Slider label="Starting lease rate" value={s.leaseRate} min={80} max={300} step={5} format={(v) => `$${v}/kW·mo`} hint={`Disclosed leases in the group start at about $${Math.round(leaseHint)}/kW·mo.`} onChange={(v) => set({ leaseRate: v })} />
           <Slider label="Rent escalator" value={s.escalator} min={0} max={0.06} step={0.0025} format={(v) => `${rate(v)} a year`} hint="Hut 8 discloses 3%. Hyperscale leases usually step up 2–4% a year." onChange={(v) => set({ escalator: v })} />
           <Slider label="NOI margin" value={s.coloMargin} min={0.5} max={0.98} step={0.01} format={pct} hint="Galaxy reports 90%+, Core Scientific 80–85%, TeraWulf 85%." onChange={(v) => set({ coloMargin: v })} />
-          <Slider label="Build cost" value={s.buildCost} min={5} max={20} step={0.5} format={(v) => `$${v}M/MW`} hint="TeraWulf guides $8–10M, Hut 8 $9–11M, Galaxy built at $13.5M." onChange={(v) => set({ buildCost: v })} />
+          <Slider label="Build cost, where undisclosed" value={s.buildCost} min={5} max={20} step={0.5} format={(v) => `$${v}M/MW`} hint="Default $12M. TeraWulf guides $8–10M, Hut 8 $9–11M, Galaxy built at $13.5M. A company figure replaces this." onChange={(v) => set({ buildCost: v })} />
           <Slider label="Building depreciation life" value={s.shellLife} min={10} max={40} format={(v) => `${v} years`} onChange={(v) => set({ shellLife: v })} />
         </Section>
 

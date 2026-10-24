@@ -81,7 +81,7 @@ export const defaultScenario: Scenario = {
   gpuRate: 9.7,
   coloMargin: 0.85,
   gpuMargin: 0.85,
-  buildCost: 10,
+  buildCost: 12,
   gpuCost: 29,
   leverage: 0.65,
   interest: 0.08,
