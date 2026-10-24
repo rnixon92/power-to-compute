@@ -1,6 +1,6 @@
 # Power to Compute
 
-An investor tracker for the bitcoin miners turning their power into AI data centers: IREN, TeraWulf, Galaxy, Core Scientific, Cipher, Applied Digital, Hut 8 and MARA, with Riot and CleanSpark on a watchlist.
+An investor tracker for the bitcoin miners turning their power into AI data centers: IREN, TeraWulf, Galaxy, Core Scientific, Cipher, Applied Digital, Hut 8, MARA, Riot and CleanSpark.
 
 It covers every site and phase, every signed lease, what each campus costs to build and how it's financed, and a forecast you control. Switch any site on or off (including announced sites with no tenant yet), set the lease rate, multiple and delays, and the implied share price updates. Every scenario lives in the URL, so you can share it as a link.
 
@@ -59,7 +59,7 @@ Two rules keep the totals honest:
 
 ## Design
 
-- **Palette.** Company colors use a fixed eight-slot categorical palette, checked for colorblind separation in both themes. The first three slots go to IREN, WULF and GLXY. Capacity tiers use a single-hue ordinal blue ramp, so "how firm" reads light to dark. See `lib/palette.ts` and the tokens in `app/globals.css`.
+- **Palette.** Company colors use a fixed categorical palette. The first eight slots were checked for colorblind separation in both themes, and the first three go to IREN, WULF and GLXY. Riot and CleanSpark take the last two. Capacity tiers use a single-hue ordinal blue ramp, so "how firm" reads light to dark. See `lib/palette.ts` and the tokens in `app/globals.css`.
 - **No dual axes.** Price, capacity and revenue each get their own pane on a shared timeline, with one crosshair across all three.
 - **Light and dark** follow the system setting, with a toggle in the top bar.
 - **Mobile.** The scenario panel turns into a bottom bar that opens as a sheet.

@@ -231,7 +231,7 @@ export function DemandView() {
           </div>
           <div className="card card-pad">
             <h2 style={{ fontSize: 18 }}>Where this group fits</h2>
-            <p className="note" style={{ margin: "4px 0 16px" }}>Signed critical IT across the eight companies, scaled up to utility power at your conversion of {scenario.conversion.toFixed(2)} IT MW per gross MW.</p>
+            <p className="note" style={{ margin: "4px 0 16px" }}>Signed critical IT in the book, scaled up to utility power at your conversion of {scenario.conversion.toFixed(2)} IT MW per gross MW.</p>
             <div className="stats" style={{ gridTemplateColumns: "1fr 1fr" }}>
               <div className="stat"><span className="eyebrow">Signed critical IT</span><strong>{mw(signedIt)}</strong><small>≈ {mw(signedUtility)} of utility power</small></div>
               <div className="stat"><span className="eyebrow">Share of Goldman growth</span><strong>{Math.round((signedUtility / 1000 / goldmanGrowth) * 100)}%</strong><small>{goldmanGrowth} GW added 2025–27</small></div>

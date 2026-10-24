@@ -104,7 +104,7 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
     <main className="wrap">
       <section className="hero">
         <h1>
-          <em>{mw(totalSigned)}</em> of AI capacity signed across eight former bitcoin miners.
+          <em>{mw(totalSigned)}</em> of AI capacity signed across ten former bitcoin miners.
         </h1>
         <p className="lede">
           Every campus, lease and build cost, with a forecast you can change. Switch sites in or out, set the lease rate and multiple, and every valuation updates.
@@ -176,13 +176,15 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
         <div className="grid-cards">
           {rows.map((r) => <ProviderCard key={r.company.ticker} row={r} market={market} href={href(`/companies/${r.company.ticker}`)} year={scenario.year} />)}
         </div>
-        <div style={{ marginTop: 18 }} className="note">
-          Watchlist, waiting on a filing read:{" "}
-          {watchlist.map((c, i) => (
-            <span key={c.ticker}>{i ? ", " : ""}<Link className="link" href={href(`/companies/${c.ticker}`)}>{c.name}</Link></span>
-          ))}
-          .
-        </div>
+        {watchlist.length ? (
+          <div style={{ marginTop: 18 }} className="note">
+            Watchlist, waiting on a filing read:{" "}
+            {watchlist.map((c, i) => (
+              <span key={c.ticker}>{i ? ", " : ""}<Link className="link" href={href(`/companies/${c.ticker}`)}>{c.name}</Link></span>
+            ))}
+            .
+          </div>
+        ) : null}
       </section>
 
       <section className="section">

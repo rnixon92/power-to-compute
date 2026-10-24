@@ -22,7 +22,7 @@ export default function MethodPage() {
         <p>The model works in critical IT megawatts, the power available to servers. Where a company quotes gross or utility power, the model converts it at 0.70 IT MW per gross MW. Helios, River Bend, Beacon Point and Polaris Forge 3 all sit between 0.67 and 0.74. You can change the factor.</p>
 
         <h2>Filling the gaps</h2>
-        <p>Company figures always win. Where a lease has no disclosed rent, the model uses your lease rate. The default, $155 per kW-month, is the weighted average of the disclosed leases in the group. GPU cloud capacity uses revenue per megawatt instead. The default, $9.7M a year, comes from IREN&apos;s Microsoft contract. Missing margins and build costs work the same way, and every row on a company page says which numbers are disclosed and which are yours.</p>
+        <p>Company figures always win. Where a lease has no disclosed rent, the model uses your lease rate. The default, $155 per kW-month, sits next to the weighted average of the disclosed leases in the group. The scenario panel shows that average. GPU cloud capacity uses revenue per megawatt instead. The default, $9.7M a year, comes from IREN&apos;s Microsoft contract. Missing margins and build costs work the same way, and every row on a company page says which numbers are disclosed and which are yours.</p>
 
         <h2>From capacity to a share price</h2>
         <p>Each month the model adds up the capacity online, its revenue and its NOI. Depreciation runs on build cost over 25 years for buildings and 5 for GPUs. Interest is charged on the debt share of build cost, then tax on what&apos;s left.</p>
