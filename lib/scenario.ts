@@ -154,24 +154,34 @@ export function appliedBasis(model: ModelKind, s: Scenario): Scenario["basis"] {
 
 /** Short label for the header. The scope is which kinds of sites are on. */
 export function scenarioChip(s: Scenario): { main: string; scope: string } {
+  const pctOf = (v: number) => `${(v * 100).toFixed(1).replace(/\.0$/, "")}%`;
   const main = s.basis === "dcf"
-    ? `Lease DCF · ${(s.dcfRate * 100).toFixed(1).replace(/\.0$/, "")}%`
+    ? `Lease DCF ${pctOf(s.dcfRate)}`
     : s.basis === "cap"
-    ? `${(s.capRate * 100).toFixed(1)}% cap · ${s.year}`
-    : s.basis === "pe"
-      ? `${s.multiple}× · ${s.year}`
-      : `${s.multiple}× EBITDA · ${s.year}`;
+      ? `${pctOf(s.capRate)} cap · ${s.year}`
+      : s.basis === "pe"
+        ? `${s.multiple}× · ${s.year}`
+        : `${s.multiple}× EBITDA · ${s.year}`;
   const parts: string[] = [];
-  if (s.tiers.live && s.tiers.contracted && !s.tiers.announced && !s.tiers.pipeline) parts.push("Signed");
-  else {
-    if (s.tiers.live) parts.push("In service");
-    if (s.tiers.contracted) parts.push("Signed");
-    if (s.tiers.announced) parts.push("No tenant");
-    if (s.tiers.pipeline) parts.push("Options");
-    if (!parts.length) parts.push("Sites off");
-  }
-  if (s.on.length || s.off.length) parts.push("Custom sites");
-  return { main, scope: parts.join(" · ") };
+  if (s.tiers.live && s.tiers.contracted) parts.push("Signed");
+  else if (s.tiers.live) parts.push("In service");
+  else if (s.tiers.contracted) parts.push("Signed, not yet running");
+  if (s.tiers.announced) parts.push("no tenant");
+  if (s.tiers.pipeline) parts.push("options");
+  let scope = parts.join(" + ") || "No sites";
+  if (s.tiers.announced || s.tiers.pipeline || s.on.length) scope += ` at ${Math.round(s.leaseOdds * 100)}%`;
+  if (s.on.length || s.off.length) scope += ", custom";
+  return { main, scope };
+}
+
+/** One line on how a company is valued under this scenario. */
+export function methodLine(model: ModelKind, s: Scenario): { label: string; detail: string } {
+  const pctOf = (v: number) => `${(v * 100).toFixed(1).replace(/\.0$/, "")}%`;
+  const basis = appliedBasis(model, s);
+  if (model === "gpu-cloud") return { label: `${s.multiple}× earnings, end ${s.year}`, detail: "GPU cloud runs on contracts of about five years, so it is valued on earnings under every method." };
+  if (basis === "dcf") return { label: `Lease DCF at ${pctOf(s.dcfRate)}`, detail: `Rent over each lease, discounted at ${pctOf(s.dcfRate)}, with sites sold at a ${pctOf(s.exitCap)} cap rate in 2050.` };
+  if (basis === "cap") return { label: `${pctOf(s.capRate)} cap rate, end ${s.year}`, detail: `NOI at the end of ${s.year} capitalized at ${pctOf(s.capRate)}, after debt.` };
+  return { label: `${s.multiple}× ${basis === "pe" ? "earnings" : "EBITDA"}, end ${s.year}`, detail: `The end-${s.year} run-rate at ${s.multiple}× ${basis === "pe" ? "earnings" : "EBITDA"}, discounted to today.` };
 }
 
 export function matchPreset(s: Scenario): PresetId | null {

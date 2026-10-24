@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { book } from "@/data/ledger";
 import { disclosedLeaseRate } from "@/lib/forecast";
-import { defaultScenario, scenarioChip } from "@/lib/scenario";
+import { defaultScenario, scenarioChip, tierLabel, TIERS } from "@/lib/scenario";
 import { useScenario } from "@/components/ScenarioProvider";
 import { PresetPicker, TierToggles } from "@/components/ScenarioControls";
 import { Segmented, Slider } from "@/components/ui";
@@ -12,6 +13,7 @@ const YEARS = [2026, 2027, 2028, 2029, 2030];
 
 export function Assumptions({ btc }: { btc: { price: number; asOf: string } | null }) {
   const { scenario: s, set, replace, panel, closePanel } = useScenario();
+  const onIren = usePathname().toLowerCase() === "/companies/iren";
   const [copied, setCopied] = useState(false);
   const leaseHint = disclosedLeaseRate(book, s);
   const chip = scenarioChip(s);
@@ -32,7 +34,7 @@ export function Assumptions({ btc }: { btc: { price: number; asOf: string } | nu
         return;
       }
       if (e.key !== "Tab" || !dialog.current) return;
-      const focusable = dialog.current.querySelectorAll<HTMLElement>("button, input, summary, a[href], [tabindex]:not([tabindex='-1'])");
+      const focusable = Array.from(dialog.current.querySelectorAll<HTMLElement>("button, input, summary, a[href], [tabindex]:not([tabindex='-1'])")).filter((el) => el.offsetParent !== null);
       if (!focusable.length) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
@@ -53,6 +55,20 @@ export function Assumptions({ btc }: { btc: { price: number; asOf: string } | nu
 
   if (!panel) return null;
 
+  const rate = (v: number, digits = 2) => `${(v * 100).toFixed(digits).replace(/\.?0+$/, "")}%`;
+  const runRate = s.basis !== "dcf";
+  const unsigned = s.tiers.announced || s.tiers.pipeline || s.on.length > 0;
+  const sitesSummary = [
+    TIERS.filter((t) => s.tiers[t]).map((t) => tierLabel[t].toLowerCase()).join(" + ") || "none",
+    unsigned ? `unsigned at ${pct(s.leaseOdds)}` : null,
+    s.slip ? `${s.slip} months late` : null,
+  ].filter(Boolean).join(" · ");
+  const methodSummary = s.basis === "dcf"
+    ? `Lease DCF · ${rate(s.dcfRate)} return · ${rate(s.exitCap)} exit`
+    : s.basis === "cap"
+      ? `${rate(s.capRate, 1)} cap rate · end ${s.year}`
+      : `${s.multiple}× ${s.basis === "pe" ? "earnings" : "EBITDA"} · end ${s.year}`;
+
   return (
     <div className="assume-root">
       <button type="button" className="assume-backdrop" aria-label="Close assumptions" onClick={closePanel} />
@@ -60,7 +76,7 @@ export function Assumptions({ btc }: { btc: { price: number; asOf: string } | nu
         <div className="assume-head">
           <div>
             <h2 id="assume-title">Assumptions</h2>
-            <p className="note">One scenario for all ten companies. The page behind this panel updates as you move these.</p>
+            <p className="note">One scenario across every company. The page behind updates as you move these.</p>
           </div>
           <button type="button" className="btn ghost" onClick={closePanel} ref={closeBtn}>Close</button>
         </div>
@@ -71,72 +87,72 @@ export function Assumptions({ btc }: { btc: { price: number; asOf: string } | nu
         </div>
         <p className="note assume-now">{chip.main} · {chip.scope}</p>
 
-        <section className="assume-group">
-          <h3>Whole book</h3>
-          <p className="note">The multiple, the year, the delay and which kinds of sites are included. These move every company, including IREN.</p>
-          <div>
-            <div className="slider-top" style={{ marginBottom: 8 }}><span>Value the run-rate at the end of</span></div>
-            <Segmented label="Valuation year" value={s.year} onChange={(y) => set({ year: y })} options={YEARS.map((y) => ({ value: y, label: String(y) }))} />
-          </div>
+        <Section title="Sites counted" summary={sitesSummary} open>
           <TierToggles ramps={ramps} />
-          <Slider label="Chance unsigned power gets leased" value={s.leaseOdds} min={0} max={1} step={0.05} format={(v) => `${Math.round(v * 100)}%`} hint="For sites with no tenant yet and future options you switch on. Their rent and build cost both count at this share, so each adds its expected value." onChange={(v) => set({ leaseOdds: v })} />
-          <div className="slider-top"><span>Value landlords on</span></div>
-          <Segmented label="Valuation basis" size="sm" value={s.basis} onChange={(b) => set({ basis: b })} options={[{ value: "dcf", label: "Lease DCF" }, { value: "cap", label: "Cap rate" }, { value: "pe", label: "Earnings" }, { value: "ebitda", label: "EBITDA" }]} />
+          <Slider label="Chance unsigned power gets leased" value={s.leaseOdds} min={0} max={1} step={0.05} format={pct} hint="Applies to sites with no tenant yet and future options you switch on. Their rent and build cost count at this share." onChange={(v) => set({ leaseOdds: v })} />
+          <Slider label="Delay on future deliveries" value={s.slip} min={0} max={24} format={(v) => (v ? `${v} months` : "On schedule")} onChange={(v) => set({ slip: v })} />
+        </Section>
+
+        <Section title="Valuation" summary={methodSummary} open>
+          <Segmented label="Valuation method" size="sm" value={s.basis} onChange={(b) => set({ basis: b })} options={[{ value: "dcf", label: "Lease DCF" }, { value: "cap", label: "Cap rate" }, { value: "pe", label: "Earnings" }, { value: "ebitda", label: "EBITDA" }]} />
           {s.basis === "dcf" ? (
             <>
-              <p className="note">Every month of rent over each lease&apos;s life, after overhead and tax, less build cost when it is spent, with each site sold at the exit cap rate in 2050. The valuation year does not apply.</p>
-              <Slider label="Required return" value={s.dcfRate} min={0.05} max={0.14} step={0.0025} format={(v) => `${(v * 100).toFixed(2).replace(/0$/, "")}%`} hint="Investment-grade project debt here costs 6–7.75%. Equity asks more." onChange={(v) => set({ dcfRate: v })} />
-              <Slider label="Exit cap rate, 2050" value={s.exitCap} min={0.05} max={0.1} step={0.0025} format={(v) => `${(v * 100).toFixed(2).replace(/0$/, "")}%`} hint="What a powered, leased site sells for at the end of the forecast. Higher is more cautious." onChange={(v) => set({ exitCap: v })} />
+              <p className="note">Every month of rent over each lease, after overhead and tax, less build cost as it is spent. Each site is sold at the exit cap rate in 2050.</p>
+              <Slider label="Required return" value={s.dcfRate} min={0.05} max={0.14} step={0.0025} format={(v) => rate(v)} hint="Investment-grade project debt here costs 6–7.75%. Equity asks more." onChange={(v) => set({ dcfRate: v })} />
+              <Slider label="Exit cap rate, 2050" value={s.exitCap} min={0.05} max={0.1} step={0.0025} format={(v) => rate(v)} hint="What a powered, leased site sells for at the end. Higher is more cautious." onChange={(v) => set({ exitCap: v })} />
             </>
-          ) : null}
-          {s.basis === "cap" ? (
-            <Slider label="Cap rate" value={s.capRate} min={0.05} max={0.1} step={0.001} format={(v) => `${(v * 100).toFixed(1)}%`} hint="One year of NOI capitalized, a quick and cautious cross-check on the lease DCF. Morgan Stanley uses 6.7% as the exit rate on Hut 8." onChange={(v) => set({ capRate: v })} />
-          ) : null}
-          <Slider label={s.basis === "cap" || s.basis === "dcf" ? "IREN earnings multiple" : "Multiple"} value={s.multiple} min={6} max={40} format={(v) => `${v}×`} hint={s.basis === "cap" || s.basis === "dcf" ? "IREN sells compute on short contracts, so it stays on earnings." : undefined} onChange={(v) => set({ multiple: v })} />
-          <Slider label="Delay on future deliveries" value={s.slip} min={0} max={24} format={(v) => (v ? `${v} months` : "On schedule")} onChange={(v) => set({ slip: v })} />
-          <details className="adv">
-            <summary>Discount, debt and tax <span aria-hidden="true">+</span></summary>
-            <div className="rail-grid">
-              <Slider label="Discount rate" value={s.discount} min={0} max={0.2} step={0.005} format={(v) => `${(v * 100).toFixed(1)}%`} onChange={(v) => set({ discount: v })} />
-              <Slider label="Debt share of build" value={s.leverage} min={0} max={0.9} step={0.05} format={pct} onChange={(v) => set({ leverage: v })} />
-              <Slider label="Interest rate" value={s.interest} min={0.03} max={0.14} step={0.0025} format={(v) => `${(v * 100).toFixed(2)}%`} onChange={(v) => set({ interest: v })} />
-              <Slider label="Tax rate" value={s.tax} min={0} max={0.3} step={0.01} format={pct} onChange={(v) => set({ tax: v })} />
-              <Slider label="Share dilution per year" value={s.dilution} min={0} max={0.2} step={0.01} format={pct} onChange={(v) => set({ dilution: v })} />
-              <Slider label="IT MW per gross MW" value={s.conversion} min={0.5} max={0.9} step={0.01} format={(v) => v.toFixed(2)} hint="Helios, River Bend and Beacon Point sit at 0.67–0.74." onChange={(v) => set({ conversion: v })} />
-            </div>
-          </details>
-        </section>
+          ) : (
+            <>
+              <p className="note">One year&apos;s run-rate, valued and brought back to today with the cash earned before then. A quick cross-check on the lease DCF.</p>
+              {s.basis === "cap" ? (
+                <Slider label="Cap rate" value={s.capRate} min={0.05} max={0.1} step={0.001} format={(v) => rate(v, 1)} hint="Morgan Stanley uses 6.7% as the exit rate on Hut 8." onChange={(v) => set({ capRate: v })} />
+              ) : (
+                <Slider label="Multiple" value={s.multiple} min={6} max={40} format={(v) => `${v}×`} onChange={(v) => set({ multiple: v })} />
+              )}
+              <YearPicker value={s.year} onChange={(y) => set({ year: y })} />
+              <Slider label="Discount rate" value={s.discount} min={0} max={0.2} step={0.005} format={(v) => rate(v, 1)} onChange={(v) => set({ discount: v })} />
+            </>
+          )}
+        </Section>
 
-        <section className="assume-group">
-          <h3>Rest of the business</h3>
+        <Section title="Rents and costs" summary={`$${s.leaseRate}/kW·mo · rising ${rate(s.escalator)} · $${s.buildCost}M/MW`}>
+          <p className="note">Used only where a lease has no disclosed figure. Company numbers always come first.</p>
+          <Slider label="Starting lease rate" value={s.leaseRate} min={80} max={300} step={5} format={(v) => `$${v}/kW·mo`} hint={`Disclosed leases in the group start at about $${Math.round(leaseHint)}/kW·mo.`} onChange={(v) => set({ leaseRate: v })} />
+          <Slider label="Rent escalator" value={s.escalator} min={0} max={0.06} step={0.0025} format={(v) => `${rate(v)} a year`} hint="Hut 8 discloses 3%. Hyperscale leases usually step up 2–4% a year." onChange={(v) => set({ escalator: v })} />
+          <Slider label="NOI margin" value={s.coloMargin} min={0.5} max={0.98} step={0.01} format={pct} hint="Galaxy reports 90%+, Core Scientific 80–85%, TeraWulf 85%." onChange={(v) => set({ coloMargin: v })} />
+          <Slider label="Build cost" value={s.buildCost} min={5} max={20} step={0.5} format={(v) => `$${v}M/MW`} hint="TeraWulf guides $8–10M, Hut 8 $9–11M, Galaxy built at $13.5M." onChange={(v) => set({ buildCost: v })} />
+          <Slider label="Building depreciation life" value={s.shellLife} min={10} max={40} format={(v) => `${v} years`} onChange={(v) => set({ shellLife: v })} />
+        </Section>
+
+        <Section title="Rest of the company" summary={`Stock pay ${s.stockPay ? "counted" : "left out"} · mining ${s.otherMultiple ? `${s.otherMultiple}×` : "off"}`}>
           <p className="note">Cash, bitcoin, debt and other claims come from each company&apos;s latest 10-Q. Overhead is shared between the AI business and anything else by gross profit.</p>
           <div style={{ display: "grid", gap: 8 }}>
             <div className="slider-top"><span>Stock-based pay</span></div>
             <Segmented label="Stock-based pay" size="sm" value={s.stockPay ? "count" : "skip"} onChange={(v) => set({ stockPay: v === "count" })} options={[{ value: "count", label: "Count as a cost" }, { value: "skip", label: "Leave it out" }]} />
-            <small className="note">It is a real cost to shareholders, paid in new shares. Several of these companies pay $100M+ a year this way.</small>
+            <small className="note">A real cost to shareholders, paid in new shares. Several of these companies pay $100M+ a year this way. Most sell-side models leave it out.</small>
           </div>
-          <Slider label="Mining and other businesses" value={s.otherMultiple} min={0} max={10} step={0.5} format={(v) => (v ? `${v}× gross profit` : "Not counted")} hint="Applied to annual gross profit after the business's share of overhead. A business that loses money counts as zero." onChange={(v) => set({ otherMultiple: v })} />
-          <p className="note">Bitcoin is valued at {btc ? `$${Math.round(btc.price).toLocaleString("en-US")}, live from Coinbase` : "the June 30 price of $58,540, because the live price did not load"}.</p>
-        </section>
+          <Slider label="Mining and other businesses" value={s.otherMultiple} min={0} max={10} step={0.5} format={(v) => (v ? `${v}× gross profit` : "Not counted")} hint="On annual gross profit after the business's share of overhead. A business that loses money counts as zero." onChange={(v) => set({ otherMultiple: v })} />
+          <p className="note">Bitcoin is valued at {btc ? `$${Math.round(btc.price).toLocaleString("en-US")}, from Coinbase when the site was built` : "the June 30 price of $58,540"}.</p>
+        </Section>
 
-        <section className="assume-group">
-          <h3>Landlords</h3>
-          <p className="note">Fills a gap only where a company has not disclosed rent, margin or build cost. Moves WULF, GLXY, CORZ, CIFR, APLD, HUT, RIOT, CLSK and MARA. Does not move IREN.</p>
-          <Slider label="Lease rate, where rent is private" value={s.leaseRate} min={80} max={300} step={5} format={(v) => `$${v}/kW·mo`} hint={`A starting rent, which then rises at the escalator. Disclosed leases in the group start at about $${Math.round(leaseHint)}/kW·mo.`} onChange={(v) => set({ leaseRate: v })} />
-          <Slider label="Rent escalator, where undisclosed" value={s.escalator} min={0} max={0.06} step={0.0025} format={(v) => `${(v * 100).toFixed(2).replace(/0$/, "")}% a year`} hint="Hut 8 discloses 3% on River Bend and Beacon Point. Hyperscale leases usually step up 2–4% a year." onChange={(v) => set({ escalator: v })} />
-          <Slider label="NOI margin, where undisclosed" value={s.coloMargin} min={0.5} max={0.98} step={0.01} format={pct} hint="Galaxy reports 90%+, Core Scientific 80–85%." onChange={(v) => set({ coloMargin: v })} />
-          <Slider label="Build cost, where undisclosed" value={s.buildCost} min={5} max={20} step={0.5} format={(v) => `$${v}M/MW`} hint="TeraWulf guides $8–10M, Hut 8 $9–11M, Galaxy built at $13.5M." onChange={(v) => set({ buildCost: v })} />
-          <Slider label="Building depreciation life" value={s.shellLife} min={10} max={40} format={(v) => `${v} years`} onChange={(v) => set({ shellLife: v })} />
-        </section>
-
-        <section className="assume-group">
-          <h3>GPU cloud</h3>
-          <p className="note">IREN sells the compute, not the building. These fill sites where IREN has not disclosed revenue or GPU cost. They do not move the landlords.</p>
-          <Slider label="GPU cloud revenue, uncontracted MW" value={s.gpuRate} min={3} max={20} step={0.1} format={(v) => `$${v.toFixed(1)}M/MW·yr`} hint="Microsoft contract works out to $9.7M per MW a year." onChange={(v) => set({ gpuRate: v })} />
+        <Section title="IREN, GPU cloud" summary={`${s.multiple}× earnings · end ${s.year} · $${s.gpuRate.toFixed(1)}M/MW`} open={onIren}>
+          <p className="note">IREN rents out GPUs on contracts of about five years, so it is valued on earnings at the end of a year you pick.</p>
+          <Slider label="Earnings multiple" value={s.multiple} min={6} max={40} format={(v) => `${v}×`} onChange={(v) => set({ multiple: v })} />
+          <YearPicker value={s.year} onChange={(y) => set({ year: y })} />
+          <Slider label="Revenue on uncontracted capacity" value={s.gpuRate} min={3} max={20} step={0.1} format={(v) => `$${v.toFixed(1)}M/MW·yr`} hint="The Microsoft contract works out to $9.7M per MW a year." onChange={(v) => set({ gpuRate: v })} />
           <Slider label="Project EBITDA margin" value={s.gpuMargin} min={0.3} max={0.95} step={0.01} format={pct} hint="IREN targets 85% on the Microsoft contract." onChange={(v) => set({ gpuMargin: v })} />
-          <Slider label="GPU capex, where undisclosed" value={s.gpuCost} min={10} max={60} format={(v) => `$${v}M/MW`} onChange={(v) => set({ gpuCost: v })} />
+          <Slider label="GPU cost, where undisclosed" value={s.gpuCost} min={10} max={60} format={(v) => `$${v}M/MW`} onChange={(v) => set({ gpuCost: v })} />
           <Slider label="GPU depreciation life" value={s.gpuLife} min={3} max={8} format={(v) => `${v} years`} onChange={(v) => set({ gpuLife: v })} />
-        </section>
+        </Section>
+
+        <Section title="Financing and details" summary={`${pct(s.leverage)} debt at ${rate(s.interest)} · tax ${pct(s.tax)}`}>
+          <p className="note">The build debt, tax and share count behind the earnings figures.</p>
+          <Slider label="Debt share of build" value={s.leverage} min={0} max={0.9} step={0.05} format={pct} onChange={(v) => set({ leverage: v })} />
+          <Slider label="Interest rate" value={s.interest} min={0.03} max={0.14} step={0.0025} format={(v) => rate(v)} onChange={(v) => set({ interest: v })} />
+          <Slider label="Tax rate" value={s.tax} min={0} max={0.3} step={0.01} format={pct} onChange={(v) => set({ tax: v })} />
+          <Slider label="Share dilution per year" value={s.dilution} min={0} max={0.2} step={0.01} format={pct} onChange={(v) => set({ dilution: v })} />
+          <Slider label="IT MW per gross MW" value={s.conversion} min={0.5} max={0.9} step={0.01} format={(v) => v.toFixed(2)} hint="Helios, River Bend and Beacon Point sit at 0.67–0.74." onChange={(v) => set({ conversion: v })} />
+        </Section>
 
         <button
           type="button"
@@ -151,6 +167,29 @@ export function Assumptions({ btc }: { btc: { price: number; asOf: string } | nu
           {copied ? "Link copied" : "Copy a link to this scenario"}
         </button>
       </aside>
+    </div>
+  );
+}
+
+/** A collapsible group. Its header shows the current values, so a closed section still reads at a glance. */
+function Section({ title, summary, open, children }: { title: string; summary: string; open?: boolean; children: React.ReactNode }) {
+  return (
+    <details className="assume-sec" open={open}>
+      <summary>
+        <span className="assume-sec-title">{title}</span>
+        <span className="assume-sec-sum">{summary}</span>
+        <svg className="chev" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
+      </summary>
+      <div className="assume-sec-body">{children}</div>
+    </details>
+  );
+}
+
+function YearPicker({ value, onChange }: { value: number; onChange: (y: number) => void }) {
+  return (
+    <div>
+      <div className="slider-top" style={{ marginBottom: 8 }}><span>Value the run-rate at the end of</span></div>
+      <Segmented label="Valuation year" size="sm" value={value} onChange={onChange} options={YEARS.map((y) => ({ value: y, label: String(y) }))} />
     </div>
   );
 }

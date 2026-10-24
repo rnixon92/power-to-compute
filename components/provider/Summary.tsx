@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import type { Company } from "@/data/types";
 import { blocks, priceByYear, sumTiers, upside, valuation, type Ctx, type Valuation } from "@/lib/forecast";
-import { appliedBasis, scenarioChip, tierLabel } from "@/lib/scenario";
+import { appliedBasis, methodLine, scenarioChip, tierLabel } from "@/lib/scenario";
 import { tierVar } from "@/lib/palette";
 import { implied, isoToLabel, mw, px, quarter, usdCompact } from "@/lib/format";
 import { useScenario } from "@/components/ScenarioProvider";
@@ -20,6 +20,7 @@ export function Summary({ company, ctx, value, multiple }: { company: Company; c
   const quote = ctx.quote;
   const { scenario: s, toggleRamp, setRamps, set, openPanel } = useScenario();
   const chip = scenarioChip(s);
+  const method = methodLine(company.model, s);
   const gpu = company.model === "gpu-cloud";
   const [all, setAll] = useState(false);
   const rows = useMemo(() => upside(company, s, ctx), [company, s, ctx]);
@@ -49,9 +50,9 @@ export function Summary({ company, ctx, value, multiple }: { company: Company; c
   return (
     <div className="card summary">
       <button type="button" className="scenario-line" onClick={openPanel}>
-        <span className="eyebrow">Book scenario</span>
-        <b>{chip.main} · {chip.scope}</b>
-        <span className="note">{gpu ? "IREN is a GPU cloud, so it stays on the earnings multiple. A cap rate does not apply here." : s.basis === "cap" ? "This price capitalizes NOI at your cap rate and subtracts project debt." : "The lease rate fills sites with no disclosed rent. It does not move IREN."}</span>
+        <span className="eyebrow">Valued on</span>
+        <b>{method.label}</b>
+        <span className="note">{method.detail} Sites counted: {chip.scope.charAt(0).toLowerCase() + chip.scope.slice(1)}.</span>
       </button>
       <div className="summary-text">
         {onMw === 0 ? (

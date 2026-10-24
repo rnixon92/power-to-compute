@@ -514,3 +514,15 @@ table.data.upside small .link { font-size: 12px; color: var(--muted); }
   .event-date { grid-column: 1 / -1; }
 }
 .tip-event { font-weight: 600; color: var(--ink); margin-bottom: 4px; max-width: 240px; }
+
+/* Assumptions drawer sections */
+.assume-sec { border-top: 1px solid var(--line); }
+.assume-sec summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: auto minmax(0, 1fr) 12px; gap: 12px; align-items: baseline; padding: 14px 0; }
+.assume-sec summary::-webkit-details-marker { display: none; }
+.assume-sec-title { font-weight: 620; font-size: 15px; }
+.assume-sec-sum { color: var(--muted); font-size: 12.5px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.assume-sec .chev { color: var(--muted); transition: transform 0.15s; align-self: center; }
+.assume-sec[open] .chev { transform: rotate(180deg); }
+.assume-sec[open] .assume-sec-sum { visibility: hidden; }
+.assume-sec summary:hover .assume-sec-title { text-decoration: underline; text-underline-offset: 3px; }
+.assume-sec-body { display: grid; gap: 16px; padding-bottom: 18px; }
