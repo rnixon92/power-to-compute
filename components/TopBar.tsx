@@ -60,17 +60,15 @@ export function TopBar({ quotes }: { quotes: Pick<Quote, "ticker" | "price" | "c
 
 function Tape({ quotes, path, href }: { quotes: Pick<Quote, "ticker" | "price" | "changePercent">[]; path: string; href: (p: string) => string }) {
   const scroller = useRef<HTMLDivElement>(null);
-  const [edges, setEdges] = useState({ left: false, right: false, narrow: false });
+  const [edges, setEdges] = useState({ left: false, right: false });
 
   useEffect(() => {
     const el = scroller.current;
     if (!el) return;
     const measure = () => {
-      const narrow = window.matchMedia("(max-width: 860px)").matches;
       setEdges({
-        narrow,
-        left: narrow && el.scrollLeft > 4,
-        right: narrow && el.scrollLeft + el.clientWidth < el.scrollWidth - 4,
+        left: el.scrollLeft > 4,
+        right: el.scrollLeft + el.clientWidth < el.scrollWidth - 4,
       });
     };
     measure();
@@ -87,11 +85,11 @@ function Tape({ quotes, path, href }: { quotes: Pick<Quote, "ticker" | "price" |
     scroller.current?.scrollBy({ left: dir * 240, behavior: "smooth" });
   }
 
-  const cls = ["tape", edges.narrow ? "narrow" : "", edges.left ? "fade-left" : "", edges.right ? "fade-right" : ""].filter(Boolean).join(" ");
+  const cls = ["tape", edges.left ? "fade-left" : "", edges.right ? "fade-right" : ""].filter(Boolean).join(" ");
 
   return (
     <div className={cls}>
-      {edges.narrow && edges.left ? <button type="button" className="tape-nav left" aria-label="Show earlier companies" onClick={() => scrollBy(-1)}>‹</button> : null}
+      {edges.left ? <button type="button" className="tape-nav left" aria-label="Show earlier companies" onClick={() => scrollBy(-1)}>‹</button> : null}
       <div className="wrap tape-scroll" ref={scroller}>
         {companies.map((c) => {
           const q = quotes.find((x) => x.ticker === c.ticker);
@@ -106,7 +104,7 @@ function Tape({ quotes, path, href }: { quotes: Pick<Quote, "ticker" | "price" |
           );
         })}
       </div>
-      {edges.narrow && edges.right ? <button type="button" className="tape-nav right" aria-label="Show more companies" onClick={() => scrollBy(1)}>›</button> : null}
+      {edges.right ? <button type="button" className="tape-nav right" aria-label="Show more companies" onClick={() => scrollBy(1)}>›</button> : null}
     </div>
   );
 }

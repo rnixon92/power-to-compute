@@ -163,7 +163,7 @@ export function series(list: Block[], s: Scenario, from = "2026-01-01"): Point[]
   return out;
 }
 
-export function equityValue(p: Point, s: Scenario, model: ModelKind = "colo-lease"): number {
+export function equityValue(p: Point, s: Scenario, model: ModelKind): number {
   const basis = appliedBasis(model, s);
   if (basis === "cap") return p.noi / s.capRate - p.debt;
   if (basis === "ebitda") return p.noi * s.multiple - p.debt;
@@ -187,7 +187,7 @@ export interface Valuation {
   years: number;
 }
 
-export function valuation(list: Block[], s: Scenario, quote?: Quote, model: ModelKind = "colo-lease"): Valuation {
+export function valuation(list: Block[], s: Scenario, quote: Quote | undefined, model: ModelKind): Valuation {
   const targetDate = `${s.year}-12-31`;
   const target = pointAt(list, s, Date.parse(targetDate));
   const equity = equityValue(target, s, model);
@@ -200,7 +200,7 @@ export function valuation(list: Block[], s: Scenario, quote?: Quote, model: Mode
 }
 
 /** Implied value per share at each future month, before discounting. */
-export function pricePath(points: Point[], s: Scenario, shares: number | null, model: ModelKind = "colo-lease"): { t: number; v: number }[] {
+export function pricePath(points: Point[], s: Scenario, shares: number | null, model: ModelKind): { t: number; v: number }[] {
   if (!shares) return [];
   const now = Date.parse(TODAY);
   return points
@@ -223,7 +223,7 @@ export interface YearRow {
 }
 
 /** Calendar-year totals, from the average of twelve monthly run-rates. */
-export function yearTable(list: Block[], s: Scenario, shares: number | null, model: ModelKind = "colo-lease"): YearRow[] {
+export function yearTable(list: Block[], s: Scenario, shares: number | null, model: ModelKind): YearRow[] {
   const rows: YearRow[] = [];
   for (let year = 2026; year <= 2030; year++) {
     let revenue = 0;
@@ -306,7 +306,7 @@ export function leaseRateOf(b: Block): number | null {
  * The multiple that makes your scenario land exactly on today's share price.
  * Price is linear in the multiple, so this solves directly. Null when earnings (or EBITDA) are not positive.
  */
-export function marketMultiple(v: Valuation, s: Scenario, quote?: Quote, model: ModelKind = "colo-lease"): number | null {
+export function marketMultiple(v: Valuation, s: Scenario, quote: Quote | undefined, model: ModelKind): number | null {
   if (!quote?.price || !v.shares) return null;
   const equityToday = quote.price * v.shares * Math.pow(1 + s.discount, v.years);
   const basis = appliedBasis(model, s);

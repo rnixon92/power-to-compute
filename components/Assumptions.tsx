@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { book } from "@/data/ledger";
 import { disclosedLeaseRate } from "@/lib/forecast";
 import { defaultScenario, scenarioChip } from "@/lib/scenario";
@@ -18,13 +18,37 @@ export function Assumptions() {
   const pct = (v: number) => `${Math.round(v * 100)}%`;
   const ramps = book.flatMap((c) => c.ramps);
 
+  const dialog = useRef<HTMLElement>(null);
+  const closeBtn = useRef<HTMLButtonElement>(null);
+
+  // Move focus into the drawer, keep Tab inside it, and hand focus back to the opener on close.
   useEffect(() => {
     if (!panel) return;
+    const opener = document.activeElement as HTMLElement | null;
+    closeBtn.current?.focus();
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") closePanel();
+      if (e.key === "Escape") {
+        closePanel();
+        return;
+      }
+      if (e.key !== "Tab" || !dialog.current) return;
+      const focusable = dialog.current.querySelectorAll<HTMLElement>("button, input, summary, a[href], [tabindex]:not([tabindex='-1'])");
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     }
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      opener?.focus();
+    };
   }, [panel, closePanel]);
 
   if (!panel) return null;
@@ -32,13 +56,13 @@ export function Assumptions() {
   return (
     <div className="assume-root">
       <button type="button" className="assume-backdrop" aria-label="Close assumptions" onClick={closePanel} />
-      <aside className="assume" role="dialog" aria-modal="true" aria-labelledby="assume-title">
+      <aside className="assume" role="dialog" aria-modal="true" aria-labelledby="assume-title" ref={dialog}>
         <div className="assume-head">
           <div>
             <h2 id="assume-title">Assumptions</h2>
             <p className="note">One scenario for all ten companies. The page behind this panel updates as you move these.</p>
           </div>
-          <button type="button" className="btn ghost" onClick={closePanel}>Close</button>
+          <button type="button" className="btn ghost" onClick={closePanel} ref={closeBtn}>Close</button>
         </div>
 
         <div className="assume-row">

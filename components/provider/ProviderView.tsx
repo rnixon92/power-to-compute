@@ -28,7 +28,7 @@ const SECTIONS = [
 const SECTION_IDS = SECTIONS.map((s) => s.id);
 
 export function ProviderView({ company, market, states, pins, mapSize }: { company: Company; market: MarketBook; states: string[]; pins: Pin[]; mapSize: [number, number] }) {
-  const { scenario } = useScenario();
+  const { scenario, openPanel } = useScenario();
   const href = useHref();
   const quote = quoteFor(market, company.ticker);
   const today = Date.parse(TODAY);
@@ -93,6 +93,11 @@ export function ProviderView({ company, market, states, pins, mapSize }: { compa
       <nav className="subnav" aria-label="Sections">
         <div className="wrap subnav-row">
           {SECTIONS.map((s) => <a key={s.id} href={`#${s.id}`} className={active === s.id ? "on" : ""}>{s.label}</a>)}
+          <button type="button" className="subnav-price" onClick={openPanel} aria-label="Implied price today. Open assumptions">
+            <span>Implied</span>
+            <b>{value.price != null && value.price > 0 ? <Tweened value={value.price} format={px} /> : "—"}</b>
+            {value.price != null && value.price > 0 ? <Delta value={(value.upside ?? 0) * 100} digits={0} /> : null}
+          </button>
         </div>
       </nav>
 

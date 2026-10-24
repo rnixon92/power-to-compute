@@ -7,7 +7,7 @@ import { book, watchlist } from "@/data/ledger";
 import type { Company, MarketBook, Tier } from "@/data/types";
 import { backlog, blocks, liveMw, marketMultiple, series, signedMw, sumTiers, tierMw, TODAY, valuation, type Point, type Valuation } from "@/lib/forecast";
 import { TIERS, tierLabel } from "@/lib/scenario";
-import { companyVar, tierVar } from "@/lib/palette";
+import { companyVar, hasSlot, tierVar } from "@/lib/palette";
 import { mw, mwTick, px, usdCompact, usdTick } from "@/lib/format";
 import { quoteFor } from "@/lib/quotes";
 import { useHref, useScenario } from "@/components/ScenarioProvider";
@@ -60,7 +60,15 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
   const shown = showIren ? rows : rows.filter((r) => r.company.model !== "gpu-cloud");
   const times = shown[0]?.points.map((p) => p.t) ?? [];
   const pick = (p: Point) => (metric === "mw" ? sumTiers(p.mw) : sumTiers(p.revenue));
-  const layers = shown.map((r) => ({ key: r.company.ticker, label: r.company.ticker, color: companyVar(r.company.ticker), values: r.points.map(pick) }));
+  const slotted = shown.filter((r) => hasSlot(r.company.ticker));
+  const rest = shown.filter((r) => !hasSlot(r.company.ticker));
+  const restLabel = rest.map((r) => r.company.ticker).join(", ");
+  const layers = [
+    ...slotted.map((r) => ({ key: r.company.ticker, label: r.company.ticker, color: companyVar(r.company.ticker), values: r.points.map(pick) })),
+    ...(rest.length
+      ? [{ key: "rest", label: restLabel, color: "var(--s-watch)", values: times.map((_, i) => rest.reduce((a, r) => a + pick(r.points[i]), 0)) }]
+      : []),
+  ];
   const ceiling = times.map((_, i) => shown.reduce((a, r) => a + (metric === "mw" ? r.points[i].mwAll : r.points[i].revenueAll), 0));
 
   const totalSigned = shown.reduce((a, r) => a + r.signed, 0);
@@ -148,7 +156,7 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
                 </p>
               </div>
               <div className="legend">
-                {shown.map((r) => (
+                {slotted.map((r) => (
                   <button
                     key={r.company.ticker}
                     type="button"
@@ -162,6 +170,18 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
                     {r.company.ticker}
                   </button>
                 ))}
+                {rest.length ? (
+                  <button
+                    type="button"
+                    onPointerEnter={() => setHighlight("rest")}
+                    onPointerLeave={() => setHighlight(null)}
+                    onFocus={() => setHighlight("rest")}
+                    onBlur={() => setHighlight(null)}
+                  >
+                    <i className="swatch" style={{ background: "var(--s-watch)" }} />
+                    {restLabel}
+                  </button>
+                ) : null}
               </div>
             </div>
             <StackedArea

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { Company, Quote } from "@/data/types";
-import { blocks, sumTiers, upside, valuation, type Valuation } from "@/lib/forecast";
+import { blocks, priceByYear, sumTiers, upside, valuation, type Valuation } from "@/lib/forecast";
 import { appliedBasis, scenarioChip, tierLabel } from "@/lib/scenario";
 import { tierVar } from "@/lib/palette";
 import { mw, px, quarter, usdCompact } from "@/lib/format";
@@ -35,11 +35,14 @@ export function Summary({ company, quote, value, multiple }: { company: Company;
     if (!rows.length) return null;
     const sc = { ...s, year: lastYear, on: [...s.on, ...rows.map((r) => r.block.ramp.id)], off: s.off.filter((id) => !rows.some((r) => r.block.ramp.id === id)) };
     const base = { ...s, year: lastYear };
-    const a = valuation(blocks(company, sc), sc, quote).price;
-    const b = valuation(blocks(company, base), base, quote).price;
+    const a = valuation(blocks(company, sc), sc, quote, company.model).price;
+    const b = valuation(blocks(company, base), base, quote, company.model).price;
     return a != null && b != null ? a - b : null;
   }, [rows, s, lastYear, company, quote]);
   const shown = all ? rows : rows.slice(0, SHOWN);
+  // Once every site is built by the valuation year, "now" and "once built" are the same number.
+  const later = rows.some((r) => r.builtYear !== s.year);
+  const years = useMemo(() => priceByYear(company, s, quote), [company, s, quote]);
 
   return (
     <div className="card summary">
@@ -72,6 +75,17 @@ export function Summary({ company, quote, value, multiple }: { company: Company;
             {name} has no signed AI lease yet, so {cap ? `its ${cap} market value` : "its market value"} rests on the rest of the business today. Its power is listed below as options you can switch on.
           </p>
         )}
+        <div className="year-row">
+          <span className="note">Implied today, valuing the run-rate at the end of</span>
+          <div className="year-strip" role="radiogroup" aria-label="Valuation year">
+            {years.map((y) => (
+              <button key={y.year} type="button" role="radio" aria-checked={y.year === s.year} className={y.year === s.year ? "on" : ""} onClick={() => set({ year: y.year })}>
+                <span>{y.year}</span>
+                <b>{y.price != null && y.price > 0 ? px(y.price) : "—"}</b>
+              </button>
+            ))}
+          </div>
+        </div>
         {rows.length ? (
           <p>
             <b>Not in this price:</b> {mw(offMw)} of power with no tenant yet or held as a future option.
@@ -91,8 +105,8 @@ export function Summary({ company, quote, value, multiple }: { company: Company;
                   <th>Site</th>
                   <th className="r">IT capacity</th>
                   <th>Fully online</th>
-                  <th className="r">Adds, end {s.year}</th>
-                  <th className="r">Adds once built</th>
+                  <th className="r">{later ? `Adds, end ${s.year}` : `Adds to the end-${s.year} price`}</th>
+                  {later ? <th className="r">Adds once built</th> : null}
                   <th className="r"><span className="sr">Switch</span></th>
                 </tr>
               </thead>
@@ -108,15 +122,21 @@ export function Summary({ company, quote, value, multiple }: { company: Company;
                     </td>
                     <td className="r">{mw(r.block.itMw)}</td>
                     <td>{quarter(r.block.full)}</td>
-                    <td className="r muted">{signedDollars(r.addNow)}</td>
-                    <td className="r">
-                      <b>{signedDollars(r.addBuilt)}</b>
-                      {r.builtYear !== s.year ? (
-                        <small>
-                          <button type="button" className="link" onClick={() => set({ year: r.builtYear })}>valued at {r.builtYear}</button>
-                        </small>
-                      ) : null}
-                    </td>
+                    {later ? (
+                      <>
+                        <td className="r muted">{signedDollars(r.addNow)}</td>
+                        <td className="r">
+                          <b>{signedDollars(r.addBuilt)}</b>
+                          {r.builtYear !== s.year ? (
+                            <small>
+                              <button type="button" className="link" onClick={() => set({ year: r.builtYear })}>valued at {r.builtYear}</button>
+                            </small>
+                          ) : null}
+                        </td>
+                      </>
+                    ) : (
+                      <td className="r"><b>{signedDollars(r.addNow)}</b></td>
+                    )}
                     <td className="r"><button type="button" className="btn" onClick={() => toggleRamp(r.block.ramp)}>Include</button></td>
                   </tr>
                 ))}
