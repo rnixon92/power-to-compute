@@ -3,7 +3,7 @@ import { DemandView } from "@/components/DemandView";
 
 export const metadata: Metadata = {
   title: "Demand — Power to Compute",
-  description: "US data-center electricity and power forecasts from EPRI, LBNL, Goldman Sachs and S&P, side by side, with AI token growth.",
+  description: "US data-center power forecasts, the gap between what is scheduled and what has been built, and the hyperscalers and neoclouds signing the leases in this book.",
 };
 
 export default function Page() {

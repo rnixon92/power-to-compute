@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { scaleBand, scaleLinear } from "d3-scale";
 import { book } from "@/data/ledger";
-import { epriSource, epriTwh, goldman, lbnl2030, openRouter, openRouterRankings, sp, twhAverage2030 } from "@/data/studies";
+import { epriSource, epriTwh, goldman, goldmanBuildGap, lbnl2030, openRouter, openRouterRankings, sp, twhAverage2030 } from "@/data/studies";
 import { signedMw } from "@/lib/forecast";
+import { tenantRows } from "@/lib/tenants";
 import { useScenario } from "@/components/ScenarioProvider";
 import { useSize } from "@/components/ui";
 import { mw } from "@/lib/format";
@@ -152,13 +153,17 @@ function AdditionsChart() {
 }
 
 export function DemandView() {
-  const { scenario } = useScenario();
+  const { scenario, showIren } = useScenario();
   const avg = twhAverage2030();
   const epri2030 = epriTwh.find((p) => p.year === 2030)!;
-  const signedIt = book.reduce((a, c) => a + signedMw(c, scenario), 0);
+  const group = showIren ? book : book.filter((c) => c.model !== "gpu-cloud");
+  const signedIt = group.reduce((a, c) => a + signedMw(c, scenario), 0);
   const signedUtility = signedIt / scenario.conversion;
   const goldmanGrowth = goldman.demandGw[goldman.demandGw.length - 1].gw - goldman.demandGw[0].gw;
   const spGrowth = sp.gw[sp.gw.length - 1].gw - sp.gw[0].gw;
+  const gap = goldmanBuildGap();
+  const tenants = tenantRows(group, scenario);
+  const tenantMax = Math.max(...tenants.map((t) => t.itMw), 1);
   const first = openRouter.points[0];
   const last = openRouter.points[openRouter.points.length - 1];
   const months = Math.round((Date.parse(last.weekOf) - Date.parse(first.weekOf)) / (30.44 * 86_400_000));
@@ -168,7 +173,7 @@ export function DemandView() {
       <section className="hero">
         <h1>US data centers could use 2–4.5× their 2024 power by 2030.</h1>
         <p className="lede">
-          Four research houses, two units. Studies measuring energy put 2030 between {epri2030.low} and {lbnl2030.highTwh} TWh, against {epriTwh[0].mid} TWh in 2024. The two central cases average {Math.round(avg.average)} TWh.
+          The studies put 2030 between {epri2030.low} and {lbnl2030.highTwh} TWh, against {epriTwh[0].mid} TWh in 2024. The build schedule for the next two years is about {Math.round(gap.scheduled / gap.built)}× what the last two years actually delivered.
         </p>
       </section>
 
@@ -221,17 +226,33 @@ export function DemandView() {
       </section>
 
       <section className="section">
+        <div className="section-head">
+          <div>
+            <h2>The shortfall</h2>
+            <p>Goldman&apos;s path to about {goldman.capacityEnd2027Gw} GW of capacity by the end of 2027, enough for {goldman.demandGw[goldman.demandGw.length - 1].gw} GW of demand at {goldman.utilization * 100}% utilization, is the schedule below. The last two years did not build at that pace.</p>
+          </div>
+        </div>
+        <div className="stats">
+          <div className="stat"><span className="eyebrow">Scheduled, 2026–27</span><strong>{gap.scheduled} GW</strong><small>{goldman.scheduledAdditionsGw.map((r) => `${r.gw} in ${r.year}`).join(", ")}</small></div>
+          <div className="stat"><span className="eyebrow">Actually built, 2024–25</span><strong>{gap.built} GW</strong><small>{goldman.realizedAdditionsGw.map((r) => `${r.gw} in ${r.year}`).join(", ")}</small></div>
+          <div className="stat"><span className="eyebrow">Gap if the pace holds</span><strong>{gap.gap.toFixed(1)} GW</strong><small>Schedule minus the last two years</small></div>
+          <div className="stat"><span className="eyebrow">Demand growth, 2025–27</span><strong>{gap.demandGrowth} GW</strong><small>Goldman, {goldman.demandGw[0].gw} GW to {goldman.demandGw[goldman.demandGw.length - 1].gw} GW</small></div>
+        </div>
+        <p className="note" style={{ marginTop: 12 }}>The {gap.gap.toFixed(1)} GW is not a second forecast. It is Goldman&apos;s own schedule minus what Goldman says was built in the previous two years. Demand over 2025–27 grows by {gap.demandGrowth} GW, so a build pace that stays at {gap.built} GW leaves the new demand uncovered.</p>
+      </section>
+
+      <section className="section">
         <div className="two-col">
           <div className="card card-pad">
-            <h2 style={{ fontSize: 18 }}>The build gap</h2>
+            <h2 style={{ fontSize: 18 }}>Built against the schedule</h2>
             <p className="note" style={{ margin: "4px 0 14px" }}>
-              Goldman sees {goldman.scheduledAdditionsGw.map((r) => `${r.gw} GW scheduled for ${r.year}`).join(" and ")}, against {goldman.realizedAdditionsGw.map((r) => `${r.gw} GW actually built in ${r.year}`).join(" and ")}. Sites with power already connected are what closes that gap.
+              Solid bars are capacity Goldman says was built. Dashed bars are what is scheduled. The jump in 2027 is the year the shortfall either closes or shows up.
             </p>
             <AdditionsChart />
           </div>
           <div className="card card-pad">
             <h2 style={{ fontSize: 18 }}>Where this group fits</h2>
-            <p className="note" style={{ margin: "4px 0 16px" }}>Signed critical IT in the book, scaled up to utility power at your conversion of {scenario.conversion.toFixed(2)} IT MW per gross MW.</p>
+            <p className="note" style={{ margin: "4px 0 16px" }}>Signed critical IT {showIren ? "in the book" : "for the landlords"}, scaled up to utility power at your conversion of {scenario.conversion.toFixed(2)} IT MW per gross MW.</p>
             <div className="stats" style={{ gridTemplateColumns: "1fr 1fr" }}>
               <div className="stat"><span className="eyebrow">Signed critical IT</span><strong>{mw(signedIt)}</strong><small>≈ {mw(signedUtility)} of utility power</small></div>
               <div className="stat"><span className="eyebrow">Share of Goldman growth</span><strong>{Math.round((signedUtility / 1000 / goldmanGrowth) * 100)}%</strong><small>{goldmanGrowth} GW added 2025–27</small></div>
@@ -242,6 +263,30 @@ export function DemandView() {
               OpenRouter weekly tokens went from {first.trillion}T in the week of {first.weekOf} to {last.trillion}T in the week of {last.weekOf}. {openRouter.note}
             </p>
           </div>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="section-head">
+          <div>
+            <h2>Who is signing</h2>
+            <p>Signed critical IT in this book, by the tenant the company named. This is not Microsoft&apos;s or Amazon&apos;s whole global build. It is the slice they, and the neoclouds, have contracted with these landlords. A large block is an investment-grade tenant the filing does not name.</p>
+          </div>
+        </div>
+        <div className="card card-pad">
+          <div className="bars">
+            {tenants.map((t) => (
+              <div className="bar-row tenant-row" key={t.name}>
+                <span>
+                  <b style={{ fontWeight: 600 }}>{t.name}</b>
+                  <small style={{ display: "block", color: "var(--muted)", fontSize: 12 }}>{t.kind} · {t.tickers.join(", ")}</small>
+                </span>
+                <div className="track"><div className="fill" style={{ width: `${(t.itMw / tenantMax) * 100}%`, background: "var(--s1)" }} /></div>
+                <b>{mw(t.itMw)}</b>
+              </div>
+            ))}
+          </div>
+          <p className="note" style={{ marginTop: 14 }}>Fluidstack includes the Lake Mariner lease shared with Core42. Microsoft is IREN&apos;s contracted book, which the company describes as Microsoft and others. Meta is the guarantor of the Sandersville lease. CoreWeave, Fluidstack and Anthropic are neoclouds and labs, shown here because they are who signed, often with a hyperscaler behind the credit.</p>
         </div>
       </section>
 

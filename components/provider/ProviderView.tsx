@@ -2,21 +2,18 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { book } from "@/data/ledger";
 import type { Company, MarketBook } from "@/data/types";
-import { backlog, blocks as toBlocks, disclosedLeaseRate, liveMw, marketMultiple, priceByYear, pricePath, series, signedMw, sumTiers, TODAY, valuation, yearTable } from "@/lib/forecast";
+import { backlog, blocks as toBlocks, liveMw, marketMultiple, pricePath, series, signedMw, sumTiers, TODAY, valuation, yearTable } from "@/lib/forecast";
 import { companyVar } from "@/lib/palette";
 import { isoToLabel, mw, px, usdCompact } from "@/lib/format";
 import { quoteFor } from "@/lib/quotes";
 import { useHref, useScenario } from "@/components/ScenarioProvider";
 import { Delta, Tweened } from "@/components/ui";
-import { TierToggles } from "@/components/ScenarioControls";
 import { ForecastChart } from "@/components/charts/ForecastChart";
 import { UsMap, type Pin } from "@/components/charts/UsMap";
-import { Rail } from "@/components/provider/Rail";
+import { PriceBridge, Summary } from "@/components/provider/Summary";
 import { Sites } from "@/components/provider/Sites";
 import { Contracts, Financing, Sources, YearTable } from "@/components/provider/Sections";
-import { Summary } from "@/components/provider/Summary";
 
 const modelLabel = { "gpu-cloud": "GPU cloud", "colo-lease": "Data-center landlord", "power-owner": "Power portfolio" } as const;
 
@@ -40,12 +37,10 @@ export function ProviderView({ company, market, states, pins, mapSize }: { compa
 
   const list = useMemo(() => toBlocks(company, scenario), [company, scenario]);
   const points = useMemo(() => series(list, scenario), [list, scenario]);
-  const value = useMemo(() => valuation(list, scenario, quote), [list, scenario, quote]);
-  const path = useMemo(() => pricePath(points, scenario, quote?.shares ?? null), [points, scenario, quote]);
-  const rows = useMemo(() => yearTable(list, scenario, quote?.shares ?? null), [list, scenario, quote]);
-  const leaseHint = useMemo(() => disclosedLeaseRate(book), []);
-  const years = useMemo(() => priceByYear(company, scenario, quote), [company, scenario, quote]);
-  const multiple = marketMultiple(value, scenario, quote);
+  const value = useMemo(() => valuation(list, scenario, quote, company.model), [list, scenario, quote, company.model]);
+  const path = useMemo(() => pricePath(points, scenario, quote?.shares ?? null, company.model), [points, scenario, quote, company.model]);
+  const rows = useMemo(() => yearTable(list, scenario, quote?.shares ?? null, company.model), [list, scenario, quote, company.model]);
+  const multiple = marketMultiple(value, scenario, quote, company.model);
   const active = useScrollSpy(SECTION_IDS);
 
   const signed = signedMw(company, scenario);
@@ -105,6 +100,7 @@ export function ProviderView({ company, market, states, pins, mapSize }: { compa
         <div className="p-main">
           <section id="forecast">
             <Summary company={company} quote={quote} value={value} multiple={multiple} />
+            <PriceBridge company={company} value={value} />
             <div className="card fc" style={{ marginTop: 14 }}>
               <div className="fc-head">
                 <div>
@@ -131,13 +127,10 @@ export function ProviderView({ company, market, states, pins, mapSize }: { compa
                 <p>Each campus, phase by phase. Switch a phase off to take it out of the forecast, or on to test a lease the company hasn&apos;t signed yet.</p>
               </div>
             </div>
-            <div className="card tier-bar-card">
-              <span className="eyebrow" style={{ marginRight: 4 }}>Include</span>
-              <TierToggles ramps={company.ramps} />
-            </div>
             {pins.length > 1 ? (
               <div className="card" style={{ overflow: "hidden", marginBottom: 14 }}>
                 <UsMap states={states} pins={pins} width={mapSize[0]} height={mapSize[1]} tickers={[company.ticker]} single />
+                <Unplotted company={company} pins={pins} />
               </div>
             ) : null}
             <Sites company={company} blocks={list} today={today} />
@@ -164,9 +157,19 @@ export function ProviderView({ company, market, states, pins, mapSize }: { compa
             <p className="note" style={{ marginTop: 14 }}><Link className="link" href={href("/method")}>How the model works</Link></p>
           </section>
         </div>
-        <Rail company={company} quote={quote} value={value} leaseHint={leaseHint} years={years} />
       </div>
     </main>
+  );
+}
+
+function Unplotted({ company, pins }: { company: Company; pins: Pin[] }) {
+  const plotted = new Set(pins.map((p) => p.campus));
+  const missing = company.campuses.filter((c) => !plotted.has(c.id));
+  if (!missing.length) return null;
+  return (
+    <p className="note" style={{ margin: "0 16px 14px" }}>
+      Not on this map: {missing.map((c) => `${c.name} (${c.place})`).join(", ")}. The company has not named a US town, or the site is outside the country.
+    </p>
   );
 }
 

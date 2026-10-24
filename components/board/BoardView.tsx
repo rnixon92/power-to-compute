@@ -12,7 +12,6 @@ import { mw, mwTick, px, usdCompact, usdTick } from "@/lib/format";
 import { quoteFor } from "@/lib/quotes";
 import { useHref, useScenario } from "@/components/ScenarioProvider";
 import { Delta, Segmented, Tweened } from "@/components/ui";
-import { PresetPicker, TierToggles } from "@/components/ScenarioControls";
 import { StackedArea } from "@/components/charts/StackedArea";
 import { Sparkline } from "@/components/charts/Sparkline";
 import { UsMap, type Pin } from "@/components/charts/UsMap";
@@ -31,7 +30,7 @@ interface Row {
 type SortKey = "ticker" | "cap" | "signed" | "perMw" | "revenue" | "implied" | "upside" | "multiple";
 
 export function BoardView({ market, states, pins, mapSize }: { market: MarketBook; states: string[]; pins: Pin[]; mapSize: [number, number] }) {
-  const { scenario, set } = useScenario();
+  const { scenario, set, openPanel, showIren, setShowIren } = useScenario();
   const href = useHref();
   const router = useRouter();
   const [metric, setMetric] = useState<"mw" | "revenue">("mw");
@@ -43,12 +42,12 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
       book.map((company) => {
         const quote = quoteFor(market, company.ticker);
         const list = blocks(company, scenario);
-        const value = valuation(list, scenario, quote);
+        const value = valuation(list, scenario, quote, company.model);
         return {
           company,
           points: series(list, scenario),
           value,
-          multiple: marketMultiple(value, scenario, quote),
+          multiple: marketMultiple(value, scenario, quote, company.model),
           signed: signedMw(company, scenario),
           live: liveMw(company, scenario),
           tiers: tierMw(company, scenario),
@@ -58,20 +57,20 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
     [market, scenario],
   );
 
-  const times = rows[0]?.points.map((p) => p.t) ?? [];
+  const shown = showIren ? rows : rows.filter((r) => r.company.model !== "gpu-cloud");
+  const times = shown[0]?.points.map((p) => p.t) ?? [];
   const pick = (p: Point) => (metric === "mw" ? sumTiers(p.mw) : sumTiers(p.revenue));
-  const layers = rows.map((r) => ({ key: r.company.ticker, label: r.company.ticker, color: companyVar(r.company.ticker), values: r.points.map(pick) }));
-  const ceiling = times.map((_, i) => rows.reduce((a, r) => a + (metric === "mw" ? r.points[i].mwAll : r.points[i].revenueAll), 0));
+  const layers = shown.map((r) => ({ key: r.company.ticker, label: r.company.ticker, color: companyVar(r.company.ticker), values: r.points.map(pick) }));
+  const ceiling = times.map((_, i) => shown.reduce((a, r) => a + (metric === "mw" ? r.points[i].mwAll : r.points[i].revenueAll), 0));
 
-  const totalSigned = rows.reduce((a, r) => a + r.signed, 0);
-  const totalLive = rows.reduce((a, r) => a + r.live, 0);
-  const totalBacklog = book.reduce((a, c) => a + backlog(c), 0);
-  const totalCap = rows.reduce((a, r) => a + (r.cap ?? 0), 0);
-  const targetRevenue = rows.reduce((a, r) => a + sumTiers(r.value.target.revenue), 0);
-  const allRamps = book.flatMap((c) => c.ramps);
-  const openMw = rows.reduce((a, r) => a + r.tiers.announced + r.tiers.pipeline, 0);
+  const totalSigned = shown.reduce((a, r) => a + r.signed, 0);
+  const totalLive = shown.reduce((a, r) => a + r.live, 0);
+  const totalBacklog = shown.reduce((a, r) => a + backlog(r.company), 0);
+  const totalCap = shown.reduce((a, r) => a + (r.cap ?? 0), 0);
+  const targetRevenue = shown.reduce((a, r) => a + sumTiers(r.value.target.revenue), 0);
+  const openMw = shown.reduce((a, r) => a + r.tiers.announced + r.tiers.pipeline, 0);
 
-  const sorted = [...rows].sort((a, b) => {
+  const sorted = [...shown].sort((a, b) => {
     const v = (r: Row): number | string => {
       switch (sort.key) {
         case "ticker": return r.company.ticker;
@@ -88,7 +87,7 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
     const bv = v(b);
     return (av < bv ? -1 : av > bv ? 1 : 0) * sort.dir;
   });
-  const perMwRows = rows.filter((r) => r.cap && r.signed).map((r) => ({ t: r.company.ticker, v: r.cap! / r.signed })).sort((a, b) => a.v - b.v);
+  const perMwRows = shown.filter((r) => r.cap && r.signed).map((r) => ({ t: r.company.ticker, v: r.cap! / r.signed })).sort((a, b) => a.v - b.v);
   const perMwMax = Math.max(...perMwRows.map((r) => r.v), 1);
 
   const th = (key: SortKey, label: string, right = true) => (
@@ -104,11 +103,19 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
     <main className="wrap">
       <section className="hero">
         <h1>
-          <em>{mw(totalSigned)}</em> of AI capacity signed across ten former bitcoin miners.
+          <em>{mw(totalSigned)}</em> of AI capacity signed across {showIren ? "ten former bitcoin miners" : "nine landlords"}.
         </h1>
         <p className="lede">
           Every campus, lease and build cost, with a forecast you can change. Switch sites in or out, set the lease rate and multiple, and every valuation updates.
         </p>
+        <div style={{ marginTop: 16 }}>
+          <Segmented
+            label="IREN in the overview"
+            value={showIren ? "on" : "off"}
+            onChange={(v) => setShowIren(v === "on")}
+            options={[{ value: "on", label: "Include IREN" }, { value: "off", label: "Landlords only" }]}
+          />
+        </div>
       </section>
 
       <div className="stats" style={{ marginTop: 28 }}>
@@ -122,19 +129,26 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
       <section className="section" style={{ paddingTop: 28 }}>
         <div className="card">
           <div className="toolbar">
-            <TierToggles ramps={allRamps} />
+            <button type="button" className="btn" onClick={openPanel}>Assumptions</button>
             <span className="grow" />
             <Segmented label="Measure" value={metric} onChange={setMetric} options={[{ value: "mw", label: "Capacity" }, { value: "revenue", label: "Revenue" }]} />
-            <PresetPicker />
           </div>
           <div style={{ padding: "18px 16px 12px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 10 }}>
               <div>
                 <h2 style={{ fontSize: 18 }}>{metric === "mw" ? "Critical IT online, by company" : "Annual revenue run-rate, by company"}</h2>
-                <p className="note" style={{ marginTop: 2 }}>Each company&apos;s ramp stacked on the dates it gave. The dotted line adds every site with no tenant yet and every future option.</p>
+                <p className="note" style={{ marginTop: 2 }}>
+                  {metric === "mw"
+                    ? showIren
+                      ? "Critical IT, stacked on the dates each company gave. Megawatts are comparable across landlords and IREN."
+                      : "Critical IT for the landlords, stacked on the dates each company gave."
+                    : showIren
+                      ? "IREN's dollars are GPU-cloud revenue. Everyone else's are rent. The dotted line adds every site with no tenant yet and every future option."
+                      : "Rent, not GPU-cloud revenue. The dotted line adds every site with no tenant yet and every future option."}
+                </p>
               </div>
               <div className="legend">
-                {rows.map((r) => (
+                {shown.map((r) => (
                   <button
                     key={r.company.ticker}
                     type="button"
@@ -170,11 +184,13 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
         <div className="section-head">
           <div>
             <h2>The companies</h2>
-            <p>Implied price is the end-{scenario.year} run-rate at {scenario.multiple}× {scenario.basis === "pe" ? "earnings" : "EBITDA"}, discounted to today. Open a company for the site-by-site breakdown.</p>
+            <p>{scenario.basis === "cap"
+              ? <>Landlords are the end-{scenario.year} NOI at a {(scenario.capRate * 100).toFixed(1)}% cap rate, after debt, discounted to today.{showIren ? <> IREN stays on {scenario.multiple}× earnings.</> : null}</>
+              : <>Implied price is the end-{scenario.year} run-rate at {scenario.multiple}× {scenario.basis === "pe" ? "earnings" : "EBITDA"}, discounted to today.</>} Open a company for the site-by-site breakdown.</p>
           </div>
         </div>
         <div className="grid-cards">
-          {rows.map((r) => <ProviderCard key={r.company.ticker} row={r} market={market} href={href(`/companies/${r.company.ticker}`)} year={scenario.year} />)}
+          {shown.map((r) => <ProviderCard key={r.company.ticker} row={r} market={market} href={href(`/companies/${r.company.ticker}`)} year={scenario.year} />)}
         </div>
         {watchlist.length ? (
           <div style={{ marginTop: 18 }} className="note">
@@ -191,7 +207,9 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
         <div className="section-head">
           <div>
             <h2>Relative value</h2>
-            <p>What the market pays for each signed megawatt, what your scenario says each share is worth, and the {scenario.basis === "pe" ? "earnings" : "EBITDA"} multiple today&apos;s price implies. Your scenario uses {scenario.multiple}×.</p>
+            <p>What the market pays for each signed megawatt, and what your scenario says each share is worth. {scenario.basis === "cap"
+              ? <>The last column is the cap rate today&apos;s price implies. Your scenario uses {(scenario.capRate * 100).toFixed(1)}%.{showIren ? " IREN stays on an earnings multiple." : null}</>
+              : <>The last column is the {scenario.basis === "pe" ? "earnings" : "EBITDA"} multiple today&apos;s price implies. Your scenario uses {scenario.multiple}×.</>}{showIren ? " IREN is a GPU cloud, so its dollars per megawatt are not a lease comparison." : null}</p>
           </div>
           <Segmented label="Valuation year" value={scenario.year} onChange={(y) => set({ year: y })} options={[2026, 2027, 2028, 2029, 2030].map((y) => ({ value: y, label: String(y) }))} />
         </div>
@@ -219,6 +237,7 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
                         <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
                           <i className="dot" style={{ background: companyVar(r.company.ticker) }} />
                           <b>{r.company.ticker}</b>
+                          {r.company.model === "gpu-cloud" ? <span className="pill">GPU cloud</span> : null}
                         </span>
                         <small>{px(q?.price ?? null)}</small>
                       </td>
@@ -228,7 +247,7 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
                       <td className="r">{usdCompact(sumTiers(r.value.target.revenue))}</td>
                       <td className="r"><b>{r.value.price != null && r.value.price > 0 ? px(r.value.price) : "—"}</b></td>
                       <td className="r">{r.value.price != null && r.value.price > 0 ? <Delta value={(r.value.upside ?? 0) * 100} digits={0} /> : <span className="muted">no lease</span>}</td>
-                      <td className="r">{r.multiple != null ? `${r.multiple.toFixed(1)}×` : "—"}</td>
+                      <td className="r">{formatMarket(r.multiple, scenario.basis, r.company.model)}</td>
                     </tr>
                   );
                 })}
@@ -259,7 +278,8 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
           </div>
         </div>
         <div className="card" style={{ overflow: "hidden" }}>
-          <UsMap states={states} pins={pins} width={mapSize[0]} height={mapSize[1]} tickers={book.map((c) => c.ticker)} />
+          <UsMap states={states} pins={showIren ? pins : pins.filter((p) => p.ticker !== "IREN")} width={mapSize[0]} height={mapSize[1]} tickers={shown.map((r) => r.company.ticker)} />
+          <p className="note" style={{ margin: "0 16px 14px" }}>A site appears here only when the company has named a US town. Anything still off the map is listed on the company page.</p>
         </div>
       </section>
 
@@ -276,6 +296,12 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
   );
 }
 
+function formatMarket(multiple: number | null, basis: string, model: string): string {
+  if (multiple == null) return "—";
+  if (basis === "cap" && model !== "gpu-cloud") return `${(multiple * 100).toFixed(1)}%`;
+  return `${multiple.toFixed(1)}×`;
+}
+
 function ProviderCard({ row, market, href, year }: { row: Row; market: MarketBook; href: string; year: number }) {
   const { company, value, tiers } = row;
   const q = quoteFor(market, company.ticker);
@@ -288,7 +314,7 @@ function ProviderCard({ row, market, href, year }: { row: Row; market: MarketBoo
           <i className="dot" style={{ background: color, width: 10, height: 10 }} />
           <div>
             <b>{company.ticker}</b>
-            <span>{company.name}</span>
+            <span>{company.model === "gpu-cloud" ? "GPU cloud" : company.name}</span>
           </div>
         </div>
         <div className="pcard-px">

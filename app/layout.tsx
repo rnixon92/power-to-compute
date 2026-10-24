@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Assumptions } from "@/components/Assumptions";
 import { ScenarioProvider } from "@/components/ScenarioProvider";
 import { TopBar } from "@/components/TopBar";
 import { getMarket } from "@/lib/market";
@@ -41,6 +42,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <Suspense>
           <ScenarioProvider>
             <TopBar quotes={quotes} />
+            <Assumptions />
             {children}
             <footer className="footer">
               <div className="wrap">

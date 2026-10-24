@@ -14,6 +14,12 @@ interface Ctx {
   setTier: (tier: Tier, on: boolean, ramps: Ramp[]) => void;
   /** Switch a set of ramps on or off individually, leaving the tier defaults alone. */
   setRamps: (ramps: Ramp[], on: boolean) => void;
+  panel: boolean;
+  openPanel: () => void;
+  closePanel: () => void;
+  /** Overview totals, charts and comparisons. The ticker always includes IREN. */
+  showIren: boolean;
+  setShowIren: (on: boolean) => void;
   query: string;
 }
 
@@ -23,7 +29,13 @@ export function ScenarioProvider({ children }: { children: React.ReactNode }) {
   const params = useSearchParams();
   const pathname = usePathname();
   const [scenario, setScenario] = useState<Scenario>(() => decodeScenario(new URLSearchParams(params.toString())));
-  const query = useMemo(() => encodeScenario(scenario), [scenario]);
+  const [panel, setPanel] = useState(false);
+  const [showIren, setShowIren] = useState(() => params.get("iren") !== "0");
+  const query = useMemo(() => {
+    const q = encodeScenario(scenario);
+    if (showIren) return q;
+    return q ? `${q}&iren=0` : "iren=0";
+  }, [scenario, showIren]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Keep the address bar shareable without a navigation on every slider tick.
@@ -60,6 +72,9 @@ export function ScenarioProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  const openPanel = useCallback(() => setPanel(true), []);
+  const closePanel = useCallback(() => setPanel(false), []);
+
   const setRamps = useCallback((ramps: Ramp[], value: boolean) => {
     setScenario((s) => {
       let on = s.on.filter((id) => !ramps.some((r) => r.id === id));
@@ -73,7 +88,10 @@ export function ScenarioProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const value = useMemo(() => ({ scenario, set, replace, toggleRamp, setTier, setRamps, query }), [scenario, set, replace, toggleRamp, setTier, setRamps, query]);
+  const value = useMemo(
+    () => ({ scenario, set, replace, toggleRamp, setTier, setRamps, panel, openPanel, closePanel, showIren, setShowIren, query }),
+    [scenario, set, replace, toggleRamp, setTier, setRamps, panel, openPanel, closePanel, showIren, query],
+  );
   return <ScenarioContext.Provider value={value}>{children}</ScenarioContext.Provider>;
 }
 

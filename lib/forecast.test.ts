@@ -90,6 +90,14 @@ describe("forecast", () => {
     expect(ev.equity).toBeCloseTo(ev.target.noi * 20 - ev.target.debt, 0);
   });
 
+  it("capitalizes landlord NOI at the cap rate and leaves IREN on earnings", () => {
+    const cap = { ...s, basis: "cap" as const, capRate: 0.075 };
+    const hut = valuation(blocks(companyByTicker("HUT")!, cap), cap, undefined, "colo-lease");
+    expect(hut.equity).toBeCloseTo(hut.target.noi / 0.075 - hut.target.debt, 0);
+    const iren = valuation(blocks(companyByTicker("IREN")!, cap), cap, undefined, "gpu-cloud");
+    expect(iren.equity).toBeCloseTo(iren.target.earnings * s.multiple, 0);
+  });
+
   it("discounts the target-year price back to today", () => {
     const quote = { shares: 100e6, price: 10 } as never;
     const v = valuation(blocks(companyByTicker("GLXY")!, s), s, quote);
@@ -128,7 +136,8 @@ describe("explaining the price", () => {
   });
 
   it("prices Muskie as upside that grows once it is built", () => {
-    const rows = upside(companyByTicker("WULF")!, s, quote);
+    const early = { ...s, year: 2028 };
+    const rows = upside(companyByTicker("WULF")!, early, quote);
     const m1 = rows.find((r) => r.block.ramp.id === "wulf-muskie-1")!;
     expect(m1.builtYear).toBe(2029);
     expect(m1.addBuilt!).toBeGreaterThan(m1.addNow!);

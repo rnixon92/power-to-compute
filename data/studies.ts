@@ -62,6 +62,19 @@ export const sp = {
   ],
 };
 
+/** Schedule for the next two years minus what the previous two years actually delivered. */
+export function goldmanBuildGap(): { built: number; scheduled: number; gap: number; demandGrowth: number } {
+  const built = goldman.realizedAdditionsGw.reduce((a, r) => a + r.gw, 0);
+  const scheduled = goldman.scheduledAdditionsGw.reduce((a, r) => a + r.gw, 0);
+  const demand = goldman.demandGw;
+  return {
+    built,
+    scheduled,
+    gap: scheduled - built,
+    demandGrowth: demand[demand.length - 1].gw - demand[0].gw,
+  };
+}
+
 export function twhAverage2030(): { average: number; left: string; right: string } {
   const epri = epriTwh.find((p) => p.year === 2030)!;
   return {

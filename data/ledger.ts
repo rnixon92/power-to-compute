@@ -271,6 +271,7 @@ export const companies: Company[] = [
       { id: "wulf-kyp", title: "Kentucky Power, Muskie fact sheet", url: "https://www.kentuckypower.com/lib/docs/company/about/MDC_Power_Fact_Sheet_Oct_2026.pdf", asOf: "2026-10-01" },
       { id: "wulf-revolver", title: "Revolver upsize report, 23 Oct 2026", url: "https://raydn.us/story/3027-terawulf-raises-revolving-credit-commitments-to-about-400-million", asOf: "2026-10-23" },
       { id: "wulf-ab", title: "TeraWulf 10-Q, Abernathy sale", url: "https://www.sec.gov/Archives/edgar/data/1083301/000108330126000166/wulf-20260630.htm", asOf: "2026-08-05" },
+      { id: "wulf-hawk", title: "TeraWulf, Lake Hawkeye lease", url: "https://www.sec.gov/Archives/edgar/data/1083301/000110465925078086/tm2523008d1_ex10-1.htm", asOf: "2025-08-12" },
     ],
     campuses: [
       {
@@ -319,12 +320,15 @@ export const companies: Company[] = [
       {
         id: "hawkeye",
         name: "Lake Hawkeye",
-        place: "New York",
+        place: "Lansing, New York",
         state: "NY",
+        lat: 42.567,
+        lng: -76.506,
         powerMw: 400,
         powerUnit: "gross",
+        note: "Former Cayuga power plant, 228 Cayuga Drive. About 183 acres under lease.",
         phases: [
-          { id: "hawk-it", name: "Potential critical IT", mw: 320, unit: "critical-it", status: "planned", when: "2029-12-31", source: "wulf-q2", note: "About 400 MW gross. Operations around 2029." },
+          { id: "hawk-it", name: "Potential critical IT", mw: 320, unit: "critical-it", status: "planned", when: "2029-12-31", source: "wulf-hawk", note: "About 400 MW gross. Operations around 2029." },
         ],
       },
     ],
@@ -505,6 +509,7 @@ export const companies: Company[] = [
       { id: "glxy-deck", title: "Galaxy Q2 2026 overview", url: "https://www.sec.gov/Archives/edgar/data/1859392/000185939226000084/exhibit992-q22026overvie.htm", asOf: "2026-08-01" },
       { id: "glxy-q2", title: "Galaxy Q2 2026 letter", url: "https://www.galaxy.com/newsroom/q226-unwrapped", asOf: "2026-08-01" },
       { id: "glxy-fin", title: "Galaxy, Helios Phase II financing", url: "https://www.sec.gov/Archives/edgar/data/1859392/000185939226000068/launch8-kexhibit99172226.htm", asOf: "2026-07-22" },
+      { id: "glxy-merlin", title: "Galaxy, Merlin campus in McGregor", url: "https://www.sec.gov/Archives/edgar/data/1859392/000185939226000084/glxy-20260630xpressrelease.htm", asOf: "2026-08-01" },
     ],
     campuses: [
       {
@@ -524,11 +529,23 @@ export const companies: Company[] = [
         ],
       },
       {
+        id: "merlin",
+        name: "Merlin",
+        place: "McGregor, Texas",
+        state: "TX",
+        lat: 31.444,
+        lng: -97.409,
+        powerMw: 500,
+        powerUnit: "gross",
+        note: "500 acres in the McGregor Industrial Park. About 74 MW is secured, with room toward 500 MW.",
+        phases: [{ id: "merlin-p", name: "Development", mw: 500, unit: "gross", status: "planned", source: "glxy-merlin" }],
+      },
+      {
         id: "glxy-other",
-        name: "Merlin, Caspian, Selene",
+        name: "Caspian and Selene",
         place: "Texas",
         state: "TX",
-        note: "Acquired sites. Together with Helios, Galaxy describes more than 5.7 GW of potential power.",
+        note: "About 700 MW and 900 MW. Galaxy has not named the towns.",
         phases: [{ id: "glxy-pipe", name: "Pipeline", unit: "gross", status: "planned", source: "glxy-q2" }],
       },
     ],
@@ -671,18 +688,19 @@ export const companies: Company[] = [
     sources: [
       { id: "cifr-fy", title: "Cipher Digital FY25 update", url: "https://investors.cipherdigital.com/news-releases/news-release-details/cipher-digital-provides-fourth-quarter-and-full-year-2025", asOf: "2026-02-24" },
       { id: "cifr-site", title: "Cipher Digital infrastructure", url: "https://cipherdigital.com/infrastructure/", asOf: "2026-10-24" },
+      { id: "cifr-sting", title: "Cipher, Stingray", url: "https://cipherdigital.com/stingray/", asOf: "2026-10-24" },
       { id: "cifr-bl", title: "Cipher, Barber Lake extension", url: "https://investors.cipherdigital.com/news-releases/news-release-details/cipher-digital-expands-barber-lake-lease-term-20-years/", asOf: "2026-09-25" },
       { id: "cifr-q2", title: "Cipher Q2 2026 update", url: "https://investors.cipherdigital.com/news-releases/news-release-details/cipher-digital-provides-second-quarter-2026-business-update/", asOf: "2026-08-04" },
       { id: "cifr-bern", title: "Bernstein, via Yahoo Finance", url: "https://finance.yahoo.com/markets/stocks/articles/bernstein-reportedly-says-bitcoin-miners-163411888.html", asOf: "2026-10-01" },
     ],
     campuses: [
       { id: "barber", name: "Barber Lake", place: "Colorado City, Texas", state: "TX", lat: 32.39, lng: -100.86, powerMw: 300, powerUnit: "gross", phases: [{ id: "barber-p", name: "Fluidstack", mw: 300, unit: "gross", status: "delivering", when: "2027-03-31", tenant: "Fluidstack", source: "cifr-bl", note: "Halls deliver from Q4 2026 through Q1 2027." }] },
-      { id: "pearl", name: "Black Pearl", place: "Texas", state: "TX", powerMw: 300, powerUnit: "gross", phases: [{ id: "pearl-p", name: "Amazon", mw: 300, unit: "gross", status: "delivering", when: "2026-08-01", tenant: "Amazon", source: "cifr-q2", note: "First capacity delivered in August 2026 and rent started. Remaining halls in fit-out." }] },
-      { id: "stingray", name: "Stingray", place: "Texas", state: "TX", powerMw: 100, powerUnit: "gross", phases: [{ id: "sting-p", name: "Third lease", mw: 100, unit: "gross", status: "construction", when: "2026-12-31", source: "cifr-site", note: "Q4 2026 on the company site list. Project financing covers the build." }] },
+      { id: "pearl", name: "Black Pearl", place: "Wink, Texas", state: "TX", lat: 31.751, lng: -103.16, powerMw: 300, powerUnit: "gross", phases: [{ id: "pearl-p", name: "Amazon", mw: 300, unit: "gross", status: "delivering", when: "2026-08-01", tenant: "Amazon", source: "cifr-q2", note: "Near Wink, on about 75 acres in Winkler County. First capacity delivered in August 2026 and rent started. Remaining halls in fit-out." }] },
+      { id: "stingray", name: "Stingray", place: "Andrews County, Texas", state: "TX", lat: 32.319, lng: -102.546, powerMw: 100, powerUnit: "gross", phases: [{ id: "sting-p", name: "Third lease", mw: 100, unit: "gross", status: "construction", when: "2026-12-31", source: "cifr-sting", note: "Andrews County. Q4 2026 on the company site list. Project financing covers the build." }] },
       { id: "odessa", name: "Odessa", place: "Odessa, Texas", state: "TX", lat: 31.85, lng: -102.37, powerMw: 207, powerUnit: "gross", phases: [{ id: "odessa-p", name: "Bitcoin mining", mw: 207, unit: "gross", status: "mining", source: "cifr-site" }] },
-      { id: "reveille", name: "Reveille", place: "Texas", state: "TX", powerMw: 70, powerUnit: "gross", phases: [{ id: "rev-p", name: "Development", mw: 70, unit: "gross", status: "planned", when: "2027-09-30", source: "cifr-site" }] },
-      { id: "ulysses", name: "Ulysses", place: "Texas", state: "TX", powerMw: 200, powerUnit: "gross", phases: [{ id: "uly-p", name: "Development", mw: 200, unit: "gross", status: "planned", when: "2027-12-31", source: "cifr-site" }] },
-      { id: "colchis", name: "Colchis", place: "Texas", state: "TX", powerMw: 1000, powerUnit: "gross", phases: [{ id: "col-p", name: "Development", mw: 1000, unit: "gross", status: "planned", when: "2029-12-31", source: "cifr-site", note: "2028–29 on the company site list." }] },
+      { id: "reveille", name: "Reveille", place: "Cotulla, Texas", state: "TX", lat: 28.437, lng: -99.235, powerMw: 70, powerUnit: "gross", phases: [{ id: "rev-p", name: "Development", mw: 70, unit: "gross", status: "planned", when: "2027-09-30", source: "cifr-site", note: "Cotulla. Energization expected in 2027." }] },
+      { id: "ulysses", name: "Ulysses", place: "Ohio", state: "OH", powerMw: 200, powerUnit: "gross", phases: [{ id: "uly-p", name: "Development", mw: 200, unit: "gross", status: "planned", when: "2027-12-31", source: "cifr-site", note: "AEP Ohio. The town is not in the annual report, so it stays off the map." }] },
+      { id: "colchis", name: "Colchis", place: "West Texas", state: "TX", powerMw: 1000, powerUnit: "gross", phases: [{ id: "col-p", name: "Development", mw: 1000, unit: "gross", status: "planned", when: "2029-12-31", source: "cifr-site", note: "1 GW in West Texas, next to an AEP substation. The town is not disclosed, so it stays off the map." }] },
       { id: "cifr-pipe", name: "Other named sites", place: "Mostly Texas", state: "TX", powerMw: 3100, powerUnit: "gross", note: "Mikeska 500, McLennan 500, Barber Lake expansion 500, Stingray expansion 200, Apollo 900 near San Antonio, Milsing 500.", phases: [{ id: "cifr-pipe-p", name: "Pipeline", mw: 3100, unit: "gross", status: "planned", source: "cifr-site" }] },
     ],
     ramps: [
@@ -716,13 +734,20 @@ export const companies: Company[] = [
     outside: "Cloud services and any cash or other balance-sheet items.",
     sources: [
       { id: "apld-pf3", title: "Applied Digital, Polaris Forge 3", url: "https://ir.applieddigital.com/news-events/press-releases/detail/152/applied-digital-reaches-significant-milestone-surpassing-1", asOf: "2026-05-20" },
+      { id: "apld-eln", title: "Applied Digital, Polaris Forge 1 in Ellendale", url: "https://ir.applieddigital.com/sec-filings/all-sec-filings/content/0001493152-25-012458/0001493152-25-012458.pdf", asOf: "2025-08-29" },
+      { id: "apld-hw", title: "Applied Digital, Polaris Forge 2 near Harwood", url: "https://www.sec.gov/Archives/edgar/data/1144879/000114487925000076/ad-harwood_prxfinal102225.htm", asOf: "2025-10-22" },
+      { id: "apld-boyce", title: "Applied Digital fiscal 2026 results", url: "https://www.sec.gov/Archives/edgar/data/1144879/000114487926000044/apldq426earningsreleaseasf.htm", asOf: "2026-07-29" },
     ],
     campuses: [
-      { id: "pf3", name: "Polaris Forge 3", place: "Northern US", powerMw: 430, powerUnit: "utility", phases: [{ id: "pf3-p", name: "Hyperscaler lease", mw: 300, unit: "critical-it", status: "contracted", when: "2027-08-31", source: "apld-pf3", note: "About 430 MW of utility power. Operations from August 2027. Same hyperscaler as Delta Forge 1." }] },
-      { id: "apld-rest", name: "Polaris Forge 1 and 2, Delta Forge 1", place: "North Dakota and the South", note: "The other 900 MW of the 1.2 GW total. Applied gives the total across these three campuses.", phases: [{ id: "apld-rest-p", name: "Remainder of 1.2 GW", mw: 900, unit: "critical-it", status: "contracted", source: "apld-pf3" }] },
+      { id: "pf1", name: "Polaris Forge 1", place: "Ellendale, North Dakota", state: "ND", lat: 46.002, lng: -98.527, powerMw: 400, powerUnit: "critical-it", phases: [{ id: "pf1-p", name: "CoreWeave", mw: 400, unit: "critical-it", status: "contracted", tenant: "CoreWeave", source: "apld-eln", note: "Ellendale campus. Leased critical IT of 400 MW." }] },
+      { id: "pf2", name: "Polaris Forge 2", place: "Harwood, North Dakota", state: "ND", lat: 46.978, lng: -96.879, powerMw: 200, powerUnit: "critical-it", phases: [{ id: "pf2-p", name: "Hyperscaler lease", mw: 200, unit: "critical-it", status: "contracted", source: "apld-hw", note: "Near Harwood. 200 MW critical IT under the initial lease." }] },
+      { id: "df1", name: "Delta Forge 1", place: "Boyce, Louisiana", state: "LA", lat: 31.386, lng: -92.671, powerMw: 300, powerUnit: "critical-it", phases: [{ id: "df1-p", name: "Hyperscaler lease", mw: 300, unit: "critical-it", status: "contracted", source: "apld-boyce", note: "Boyce, Louisiana. 300 MW critical IT." }] },
+      { id: "pf3", name: "Polaris Forge 3", place: "North Dakota", state: "ND", powerMw: 430, powerUnit: "utility", phases: [{ id: "pf3-p", name: "Hyperscaler lease", mw: 300, unit: "critical-it", status: "contracted", when: "2027-08-31", source: "apld-pf3", note: "North Dakota. The town is not disclosed. About 430 MW of utility power. Operations from August 2027. Same hyperscaler as Delta Forge 1." }] },
     ],
     ramps: [
-      { id: "apld-rest", campus: "apld-rest", label: "Polaris Forge 1 and 2, Delta Forge 1", tier: "contracted", tenant: "CoreWeave and hyperscalers", mw: 900, unit: "critical-it", start: "2026-01-01", full: "2027-12-31", timing: "estimate", revenue: (31e9 - 7.5e9) / 15, termYears: 15, contractValue: 31e9 - 7.5e9, capexKind: "shell", source: "apld-pf3", note: "$23.5B of the $31B base-term rent, averaged over 15 years. Halls phase in over 2026 and 2027." },
+      { id: "apld-pf1", campus: "pf1", label: "Polaris Forge 1", tier: "contracted", tenant: "CoreWeave", mw: 400, unit: "critical-it", start: "2026-01-01", full: "2027-12-31", timing: "estimate", revenue: (31e9 - 7.5e9) / 15 * (400 / 900), termYears: 15, contractValue: (31e9 - 7.5e9) * (400 / 900), capexKind: "shell", source: "apld-eln", note: "Ellendale. Share of the $23.5B of base-term rent outside Polaris Forge 3, split by megawatts. Halls phase in over 2026 and 2027." },
+      { id: "apld-pf2", campus: "pf2", label: "Polaris Forge 2", tier: "contracted", tenant: "Investment-grade hyperscaler", mw: 200, unit: "critical-it", start: "2026-01-01", full: "2027-12-31", timing: "estimate", revenue: (31e9 - 7.5e9) / 15 * (200 / 900), termYears: 15, contractValue: (31e9 - 7.5e9) * (200 / 900), capexKind: "shell", source: "apld-hw", note: "Near Harwood. Same rent split." },
+      { id: "apld-df1", campus: "df1", label: "Delta Forge 1", tier: "contracted", tenant: "Investment-grade hyperscaler", mw: 300, unit: "critical-it", start: "2026-01-01", full: "2027-12-31", timing: "estimate", revenue: (31e9 - 7.5e9) / 15 * (300 / 900), termYears: 15, contractValue: (31e9 - 7.5e9) * (300 / 900), capexKind: "shell", source: "apld-boyce", note: "Boyce, Louisiana. Same rent split." },
       { id: "apld-pf3", campus: "pf3", label: "Polaris Forge 3", tier: "contracted", tenant: "Investment-grade hyperscaler", mw: 300, unit: "critical-it", start: "2027-08-31", full: "2028-02-28", timing: "estimate", revenue: 7.5e9 / 15, termYears: 15, contractValue: 7.5e9, capexKind: "shell", source: "apld-pf3", note: "$7.5B over 15 years. Operations from August 2027." },
     ],
     deals: [
@@ -853,6 +878,7 @@ export const companies: Company[] = [
       { id: "riot-amd", title: "Riot, Rockdale land and AMD lease", url: "https://www.sec.gov/Archives/edgar/data/1167419/000110465926004551/riot-20260116xex99d1.htm", asOf: "2026-01-16" },
       { id: "riot-q2", title: "Riot Q2 2026 results", url: "https://www.sec.gov/Archives/edgar/data/1167419/000110465926093406/riot-20260810xex99d1.htm", asOf: "2026-08-10" },
       { id: "riot-deck", title: "Riot Q2 2026 presentation", url: "https://www.sec.gov/Archives/edgar/data/1167419/000110465926093406/riot-20260810xex99d2.htm", asOf: "2026-08-10" },
+      { id: "riot-ky", title: "Riot, Kentucky", url: "https://www.riotplatforms.com/locations/kentucky/", asOf: "2026-10-24" },
     ],
     campuses: [
       {
@@ -891,11 +917,14 @@ export const companies: Company[] = [
       {
         id: "riot-ky",
         name: "Kentucky",
-        place: "Kentucky",
+        place: "Paducah, Kentucky",
+        state: "KY",
+        lat: 37.084,
+        lng: -88.6,
         powerMw: 300,
         powerUnit: "gross",
-        note: "Mining power. Counted in the 2 GW the company describes across Texas and Kentucky, and not in the data center plan.",
-        phases: [{ id: "ky-mine", name: "Bitcoin mining", mw: 300, unit: "gross", status: "mining", source: "riot-deck" }],
+        note: "Commerce Drive and Blue Steel, both at Paducah. Mining power, not in the data center plan.",
+        phases: [{ id: "ky-mine", name: "Bitcoin mining", mw: 300, unit: "gross", status: "mining", source: "riot-ky" }],
       },
     ],
     ramps: [

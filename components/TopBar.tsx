@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { companies } from "@/data/ledger";
 import type { Quote } from "@/data/types";
 import { companyVar } from "@/lib/palette";
-import { useHref } from "@/components/ScenarioProvider";
+import { scenarioChip } from "@/lib/scenario";
+import { useHref, useScenario } from "@/components/ScenarioProvider";
 import { Delta } from "@/components/ui";
 
 const links = [
@@ -18,8 +19,22 @@ const links = [
 export function TopBar({ quotes }: { quotes: Pick<Quote, "ticker" | "price" | "changePercent">[] }) {
   const path = usePathname();
   const href = useHref();
+  const { scenario, openPanel } = useScenario();
+  const chip = scenarioChip(scenario);
+  const bar = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const el = bar.current;
+    if (!el) return;
+    const apply = () => document.documentElement.style.setProperty("--header-h", `${el.offsetHeight}px`);
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   return (
-    <header className="topbar">
+    <header className="topbar" ref={bar}>
       <div className="wrap topbar-row">
         <Link href={href("/")} className="brand">
           Power to Compute
@@ -31,26 +46,68 @@ export function TopBar({ quotes }: { quotes: Pick<Quote, "ticker" | "price" | "c
           })}
         </nav>
         <div className="topbar-end">
+          <button type="button" className="assume-btn" onClick={openPanel} aria-haspopup="dialog">
+            <span>{chip.main}</span>
+            <small>{chip.scope}</small>
+          </button>
           <ThemeToggle />
         </div>
       </div>
-      <div className="tape">
-        <div className="wrap tape-row">
-          {companies.map((c) => {
-            const q = quotes.find((x) => x.ticker === c.ticker);
-            const on = path.toLowerCase() === `/companies/${c.ticker.toLowerCase()}`;
-            return (
-              <Link key={c.ticker} href={href(`/companies/${c.ticker}`)} className={on ? "on" : ""}>
-                <i className="dot" style={{ background: companyVar(c.ticker) }} />
-                <b>{c.ticker}</b>
-                <span className="px tabular">{q?.price != null ? `$${q.price.toFixed(2)}` : "—"}</span>
-                <Delta value={q?.changePercent ?? null} />
-              </Link>
-            );
-          })}
-        </div>
-      </div>
+      <Tape quotes={quotes} path={path} href={href} />
     </header>
+  );
+}
+
+function Tape({ quotes, path, href }: { quotes: Pick<Quote, "ticker" | "price" | "changePercent">[]; path: string; href: (p: string) => string }) {
+  const scroller = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({ left: false, right: false, narrow: false });
+
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const measure = () => {
+      const narrow = window.matchMedia("(max-width: 860px)").matches;
+      setEdges({
+        narrow,
+        left: narrow && el.scrollLeft > 4,
+        right: narrow && el.scrollLeft + el.clientWidth < el.scrollWidth - 4,
+      });
+    };
+    measure();
+    el.addEventListener("scroll", measure, { passive: true });
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", measure);
+      ro.disconnect();
+    };
+  }, []);
+
+  function scrollBy(dir: number) {
+    scroller.current?.scrollBy({ left: dir * 240, behavior: "smooth" });
+  }
+
+  const cls = ["tape", edges.narrow ? "narrow" : "", edges.left ? "fade-left" : "", edges.right ? "fade-right" : ""].filter(Boolean).join(" ");
+
+  return (
+    <div className={cls}>
+      {edges.narrow && edges.left ? <button type="button" className="tape-nav left" aria-label="Show earlier companies" onClick={() => scrollBy(-1)}>‹</button> : null}
+      <div className="wrap tape-scroll" ref={scroller}>
+        {companies.map((c) => {
+          const q = quotes.find((x) => x.ticker === c.ticker);
+          const on = path.toLowerCase() === `/companies/${c.ticker.toLowerCase()}`;
+          return (
+            <Link key={c.ticker} href={href(`/companies/${c.ticker}`)} className={on ? "on" : ""}>
+              <i className="dot" style={{ background: companyVar(c.ticker) }} />
+              <b>{c.ticker}</b>
+              <span className="px tabular">{q?.price != null ? `$${q.price.toFixed(2)}` : "—"}</span>
+              <Delta value={q?.changePercent ?? null} />
+            </Link>
+          );
+        })}
+      </div>
+      {edges.narrow && edges.right ? <button type="button" className="tape-nav right" aria-label="Show more companies" onClick={() => scrollBy(1)}>›</button> : null}
+    </div>
   );
 }
 

@@ -1,12 +1,14 @@
-import type { Tier } from "@/data/types";
+import type { ModelKind, Tier } from "@/data/types";
 
 export interface Scenario {
   /** Default switch state for each tier. Individual ramps can override it. */
   tiers: Record<Tier, boolean>;
   on: string[];
   off: string[];
-  basis: "pe" | "ebitda";
+  basis: "pe" | "ebitda" | "cap";
   multiple: number;
+  /** Landlord cap rate. A higher rate is a lower price. IREN ignores this and stays on earnings. */
+  capRate: number;
   /** Value the run-rate at the end of this year. */
   year: number;
   discount: number;
@@ -55,7 +57,8 @@ export const defaultScenario: Scenario = {
   off: [],
   basis: "pe",
   multiple: 20,
-  year: 2028,
+  capRate: 0.075,
+  year: 2030,
   discount: 0.1,
   leaseRate: 155,
   gpuRate: 9.7,
@@ -78,13 +81,14 @@ export type PresetId = "bear" | "base" | "bull";
 export const presets: Record<PresetId, { label: string; blurb: string; apply: (s: Scenario) => Scenario }> = {
   bear: {
     label: "Bear",
-    blurb: "Signed capacity only, six months late, lower rents and a 14× multiple.",
+    blurb: "Signed capacity only, six months late, lower rents, a 14× multiple and a 9% cap rate.",
     apply: (s) => ({
       ...s,
       tiers: { live: true, contracted: true, announced: false, pipeline: false },
       on: [],
       off: [],
       multiple: 14,
+      capRate: 0.09,
       discount: 0.12,
       leaseRate: Math.round((defaultScenario.leaseRate * 0.85) / 5) * 5,
       coloMargin: 0.8,
@@ -94,18 +98,19 @@ export const presets: Record<PresetId, { label: string; blurb: string; apply: (s
   },
   base: {
     label: "Base",
-    blurb: "Signed capacity on company timelines at 20× earnings.",
+    blurb: "Signed capacity on company timelines, at 20× earnings at the end of 2030, discounted back.",
     apply: () => ({ ...defaultScenario }),
   },
   bull: {
     label: "Bull",
-    blurb: "Sites with no tenant yet get leased on time, at higher rents and 25× earnings.",
+    blurb: "Sites with no tenant yet get leased on time, at higher rents, 25× earnings and a 6.7% cap rate.",
     apply: (s) => ({
       ...s,
       tiers: { live: true, contracted: true, announced: true, pipeline: false },
       on: [],
       off: [],
       multiple: 25,
+      capRate: 0.067,
       discount: 0.09,
       leaseRate: Math.round((defaultScenario.leaseRate * 1.1) / 5) * 5,
       coloMargin: 0.88,
@@ -114,6 +119,31 @@ export const presets: Record<PresetId, { label: string; blurb: string; apply: (s
     }),
   },
 };
+
+/** GPU cloud stays on earnings. A cap rate is a landlord tool. */
+export function appliedBasis(model: ModelKind, s: Scenario): Scenario["basis"] {
+  return model === "gpu-cloud" ? "pe" : s.basis;
+}
+
+/** Short label for the header. The scope is which kinds of sites are on. */
+export function scenarioChip(s: Scenario): { main: string; scope: string } {
+  const main = s.basis === "cap"
+    ? `${(s.capRate * 100).toFixed(1)}% cap · ${s.year}`
+    : s.basis === "pe"
+      ? `${s.multiple}× · ${s.year}`
+      : `${s.multiple}× EBITDA · ${s.year}`;
+  const parts: string[] = [];
+  if (s.tiers.live && s.tiers.contracted && !s.tiers.announced && !s.tiers.pipeline) parts.push("Signed");
+  else {
+    if (s.tiers.live) parts.push("In service");
+    if (s.tiers.contracted) parts.push("Signed");
+    if (s.tiers.announced) parts.push("No tenant");
+    if (s.tiers.pipeline) parts.push("Options");
+    if (!parts.length) parts.push("Sites off");
+  }
+  if (s.on.length || s.off.length) parts.push("Custom sites");
+  return { main, scope: parts.join(" · ") };
+}
 
 export function matchPreset(s: Scenario): PresetId | null {
   for (const id of Object.keys(presets) as PresetId[]) {
@@ -132,6 +162,7 @@ type NumKey = { [K in keyof Scenario]: Scenario[K] extends number ? K : never }[
 /** Short URL keys, with a scale so the query reads as whole numbers where it can. */
 const numParams: { key: NumKey; q: string; scale: number; min: number; max: number }[] = [
   { key: "multiple", q: "m", scale: 1, min: 1, max: 60 },
+  { key: "capRate", q: "cap", scale: 100, min: 4, max: 12 },
   { key: "year", q: "y", scale: 1, min: 2026, max: 2030 },
   { key: "discount", q: "d", scale: 100, min: 0, max: 30 },
   { key: "leaseRate", q: "lr", scale: 1, min: 40, max: 500 },
@@ -175,7 +206,8 @@ export function decodeScenario(params: URLSearchParams): Scenario {
     if (!Number.isFinite(n)) continue;
     s[key] = Math.min(max, Math.max(min, n)) / scale;
   }
-  if (params.get("b") === "ebitda") s.basis = "ebitda";
+  const basis = params.get("b");
+  if (basis === "ebitda" || basis === "cap") s.basis = basis;
   const t = params.get("t");
   if (t != null) {
     for (const tier of TIERS) s.tiers[tier] = t.includes(tierCode[tier]);

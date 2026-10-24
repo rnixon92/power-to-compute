@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import type { Company, Quote } from "@/data/types";
 import { blocks, sumTiers, upside, valuation, type Valuation } from "@/lib/forecast";
-import { tierLabel } from "@/lib/scenario";
+import { appliedBasis, scenarioChip, tierLabel } from "@/lib/scenario";
 import { tierVar } from "@/lib/palette";
 import { mw, px, quarter, usdCompact } from "@/lib/format";
 import { useScenario } from "@/components/ScenarioProvider";
@@ -17,14 +17,17 @@ function signedDollars(n: number | null): string {
 }
 
 export function Summary({ company, quote, value, multiple }: { company: Company; quote?: Quote; value: Valuation; multiple: number | null }) {
-  const { scenario: s, toggleRamp, setRamps, set } = useScenario();
+  const { scenario: s, toggleRamp, setRamps, set, openPanel } = useScenario();
+  const chip = scenarioChip(s);
+  const gpu = company.model === "gpu-cloud";
   const [all, setAll] = useState(false);
   const rows = useMemo(() => upside(company, s, quote), [company, s, quote]);
   const name = company.name;
   const onMw = sumTiers(value.target.mw);
   const cap = quote?.marketCap ? usdCompact(quote.marketCap) : null;
   const ok = value.price != null && value.price > 0;
-  const basis = s.basis === "pe" ? "earnings" : "EBITDA";
+  const basis = appliedBasis(company.model, s);
+  const basisWord = basis === "cap" ? "NOI" : basis === "pe" ? "earnings" : "EBITDA";
 
   const offMw = rows.reduce((a, r) => a + r.block.itMw, 0);
   const lastYear = rows.reduce((a, r) => Math.max(a, r.builtYear), s.year);
@@ -40,6 +43,11 @@ export function Summary({ company, quote, value, multiple }: { company: Company;
 
   return (
     <div className="card summary">
+      <button type="button" className="scenario-line" onClick={openPanel}>
+        <span className="eyebrow">Book scenario</span>
+        <b>{chip.main} · {chip.scope}</b>
+        <span className="note">{gpu ? "IREN is a GPU cloud, so it stays on the earnings multiple. A cap rate does not apply here." : s.basis === "cap" ? "This price capitalizes NOI at your cap rate and subtracts project debt." : "The lease rate fills sites with no disclosed rent. It does not move IREN."}</span>
+      </button>
       <div className="summary-text">
         {ok ? (
           <>
@@ -48,14 +56,16 @@ export function Summary({ company, quote, value, multiple }: { company: Company;
               <b>{px(value.price)}</b> a share, {pctWord(value.upside)} today&apos;s price.
             </p>
             <p>
-              {multiple != null
-                ? <>Put another way, today&apos;s price pays <b>{multiple.toFixed(1)}×</b> {basis} at the end-{s.year} run-rate. Your scenario uses {s.multiple}×.</>
-                : <>Earnings at the end of {s.year} are negative in your scenario, so there&apos;s no market multiple to compare.</>}
+              {multiple != null && basis === "cap"
+                ? <>Today&apos;s price implies a <b>{(multiple * 100).toFixed(1)}%</b> cap rate on the end-{s.year} NOI, after debt. Your scenario uses {(s.capRate * 100).toFixed(1)}%.</>
+                : multiple != null
+                  ? <>Put another way, today&apos;s price pays <b>{multiple.toFixed(1)}×</b> {basisWord} at the end-{s.year} run-rate. Your scenario uses {s.multiple}×.</>
+                  : <>Earnings at the end of {s.year} are negative in your scenario, so there&apos;s no market multiple to compare.</>}
             </p>
           </>
         ) : onMw > 0 ? (
           <p className="lead">
-            {name}&apos;s switched-on capacity earns less than it costs to carry at the end of {s.year} in your scenario. Try a later year in the panel, a higher margin or a longer depreciation life.
+            {name}&apos;s switched-on capacity earns less than it costs to carry at the end of {s.year} in your scenario. Open assumptions and try a later year, a higher margin or a longer depreciation life.
           </p>
         ) : (
           <p className="lead">
@@ -65,7 +75,7 @@ export function Summary({ company, quote, value, multiple }: { company: Company;
         {rows.length ? (
           <p>
             <b>Not in this price:</b> {mw(offMw)} of power with no tenant yet or held as a future option.
-            {allOn != null && allOn > 0 ? <> Leased at your rate, all of it would add about <b>{px(allOn)}</b> a share once built, valued at the end of {lastYear}.</> : null}
+            {allOn != null && allOn > 0 ? <> {gpu ? "At your GPU rate" : "Leased at your rate"}, all of it would add about <b>{px(allOn)}</b> a share once built, valued at the end of {lastYear}.</> : null}
           </p>
         ) : (
           <p className="muted">Every site in the ledger is switched on.</p>
@@ -117,11 +127,53 @@ export function Summary({ company, quote, value, multiple }: { company: Company;
             {rows.length > SHOWN ? (
               <button type="button" className="btn ghost" onClick={() => setAll(!all)}>{all ? "Show fewer" : `Show all ${rows.length}`}</button>
             ) : <span />}
-            <span className="note">Each figure is per share today, at your lease rate and build cost, with nothing else changed.</span>
+            <span className="note">{gpu ? "Each figure is per share today. Sites without a disclosed contract use your GPU rate and GPU cost." : "Each figure is per share today. Sites without a disclosed rent use your lease rate and build cost."}</span>
             <button type="button" className="btn" onClick={() => setRamps(rows.map((r) => r.block.ramp), true)}>Include all</button>
           </div>
         </>
       ) : null}
+    </div>
+  );
+}
+
+export function PriceBridge({ company, value }: { company: Company; value: Valuation }) {
+  const { scenario: s } = useScenario();
+  const gpu = company.model === "gpu-cloud";
+  const basis = appliedBasis(company.model, s);
+  const t = value.target;
+  const revenue = sumTiers(t.revenue);
+  const pretax = t.noi - t.da - t.interest;
+  const tax = pretax > 0 ? pretax * s.tax : 0;
+  const ok = value.price != null && value.price > 0;
+  return (
+    <div className="card card-pad" style={{ marginTop: 14 }}>
+      <div className="eyebrow">How this price is built, end {s.year}</div>
+      <div className="bridge" style={{ marginTop: 8, maxWidth: 520 }}>
+        <div><span>Revenue run-rate</span><b>{usdCompact(revenue)}</b></div>
+        <div><span>{gpu ? "Project EBITDA" : "NOI"}{revenue ? ` · ${Math.round((t.noi / revenue) * 100)}%` : ""}</span><b>{usdCompact(t.noi)}</b></div>
+        {basis === "pe" ? (
+          <>
+            <div><span>Depreciation</span><b>−{usdCompact(t.da)}</b></div>
+            <div><span>Interest on {Math.round(s.leverage * 100)}% debt</span><b>−{usdCompact(t.interest)}</b></div>
+            <div><span>Tax</span><b>−{usdCompact(tax)}</b></div>
+            <div className="total"><span>Earnings</span><b>{usdCompact(t.earnings)}</b></div>
+            <div><span>× {s.multiple} = equity value</span><b>{usdCompact(value.equity)}</b></div>
+          </>
+        ) : basis === "cap" ? (
+          <>
+            <div><span>NOI ÷ {(s.capRate * 100).toFixed(1)}% cap rate</span><b>{usdCompact(t.noi / s.capRate)}</b></div>
+            <div><span>Project debt</span><b>−{usdCompact(t.debt)}</b></div>
+            <div className="total"><span>Equity value</span><b>{usdCompact(value.equity)}</b></div>
+          </>
+        ) : (
+          <>
+            <div><span>Project debt</span><b>−{usdCompact(t.debt)}</b></div>
+            <div><span>× {s.multiple}, then debt off</span><b>{usdCompact(value.equity)}</b></div>
+          </>
+        )}
+        <div><span>÷ {value.shares ? `${(value.shares / 1e6).toFixed(0)}M shares` : "shares"}</span><b>{px(value.futurePrice)}</b></div>
+        <div className="total"><span>Discounted to today</span><b>{ok ? px(value.price) : "—"}</b></div>
+      </div>
     </div>
   );
 }

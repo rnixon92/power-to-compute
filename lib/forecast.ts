@@ -1,5 +1,5 @@
-import type { Company, Quote, Ramp, Tier } from "@/data/types";
-import { TIERS, type Scenario } from "@/lib/scenario";
+import type { Company, ModelKind, Quote, Ramp, Tier } from "@/data/types";
+import { appliedBasis, TIERS, type Scenario } from "@/lib/scenario";
 
 export const TODAY = new Date().toISOString().slice(0, 10);
 export const HORIZON_END = "2030-12-31";
@@ -163,8 +163,11 @@ export function series(list: Block[], s: Scenario, from = "2026-01-01"): Point[]
   return out;
 }
 
-export function equityValue(p: Point, s: Scenario): number {
-  return s.basis === "pe" ? p.earnings * s.multiple : p.noi * s.multiple - p.debt;
+export function equityValue(p: Point, s: Scenario, model: ModelKind = "colo-lease"): number {
+  const basis = appliedBasis(model, s);
+  if (basis === "cap") return p.noi / s.capRate - p.debt;
+  if (basis === "ebitda") return p.noi * s.multiple - p.debt;
+  return p.earnings * s.multiple;
 }
 
 export function sharesAt(shares: number, t: number, s: Scenario): number {
@@ -184,10 +187,10 @@ export interface Valuation {
   years: number;
 }
 
-export function valuation(list: Block[], s: Scenario, quote?: Quote): Valuation {
+export function valuation(list: Block[], s: Scenario, quote?: Quote, model: ModelKind = "colo-lease"): Valuation {
   const targetDate = `${s.year}-12-31`;
   const target = pointAt(list, s, Date.parse(targetDate));
-  const equity = equityValue(target, s);
+  const equity = equityValue(target, s, model);
   const years = Math.max(0, (Date.parse(targetDate) - Date.parse(TODAY)) / YEAR);
   const shares = quote?.shares ? sharesAt(quote.shares, Date.parse(targetDate), s) : null;
   const futurePrice = shares ? equity / shares : null;
@@ -197,12 +200,12 @@ export function valuation(list: Block[], s: Scenario, quote?: Quote): Valuation 
 }
 
 /** Implied value per share at each future month, before discounting. */
-export function pricePath(points: Point[], s: Scenario, shares: number | null): { t: number; v: number }[] {
+export function pricePath(points: Point[], s: Scenario, shares: number | null, model: ModelKind = "colo-lease"): { t: number; v: number }[] {
   if (!shares) return [];
   const now = Date.parse(TODAY);
   return points
     .filter((p) => p.t >= now)
-    .map((p) => ({ t: p.t, v: equityValue(p, s) / sharesAt(shares, p.t, s) }));
+    .map((p) => ({ t: p.t, v: equityValue(p, s, model) / sharesAt(shares, p.t, s) }));
 }
 
 export interface YearRow {
@@ -220,7 +223,7 @@ export interface YearRow {
 }
 
 /** Calendar-year totals, from the average of twelve monthly run-rates. */
-export function yearTable(list: Block[], s: Scenario, shares: number | null): YearRow[] {
+export function yearTable(list: Block[], s: Scenario, shares: number | null, model: ModelKind = "colo-lease"): YearRow[] {
   const rows: YearRow[] = [];
   for (let year = 2026; year <= 2030; year++) {
     let revenue = 0;
@@ -249,7 +252,7 @@ export function yearTable(list: Block[], s: Scenario, shares: number | null): Ye
       exitRevenue: sumTiers(end.revenue),
       exitEarnings: end.earnings,
       eps: sh ? earnings / sh : null,
-      value: sh ? equityValue(end, s) / sh : null,
+      value: sh ? equityValue(end, s, model) / sh : null,
     });
   }
   return rows;
@@ -303,10 +306,12 @@ export function leaseRateOf(b: Block): number | null {
  * The multiple that makes your scenario land exactly on today's share price.
  * Price is linear in the multiple, so this solves directly. Null when earnings (or EBITDA) are not positive.
  */
-export function marketMultiple(v: Valuation, s: Scenario, quote?: Quote): number | null {
+export function marketMultiple(v: Valuation, s: Scenario, quote?: Quote, model: ModelKind = "colo-lease"): number | null {
   if (!quote?.price || !v.shares) return null;
   const equityToday = quote.price * v.shares * Math.pow(1 + s.discount, v.years);
-  if (s.basis === "pe") return v.target.earnings > 0 ? equityToday / v.target.earnings : null;
+  const basis = appliedBasis(model, s);
+  if (basis === "cap") return v.target.noi > 0 ? v.target.noi / (equityToday + v.target.debt) : null;
+  if (basis === "pe") return v.target.earnings > 0 ? equityToday / v.target.earnings : null;
   return v.target.noi > 0 ? (equityToday + v.target.debt) / v.target.noi : null;
 }
 
@@ -322,7 +327,7 @@ export interface Upside {
 
 function priceWith(company: Company, s: Scenario, quote: Quote | undefined, year: number): number | null {
   const sc = { ...s, year };
-  return valuation(blocks(company, sc), sc, quote).price;
+  return valuation(blocks(company, sc), sc, quote, company.model).price;
 }
 
 /** What each switched-off ramp would add per share, largest first. */
@@ -354,7 +359,7 @@ export function upside(company: Company, s: Scenario, quote?: Quote): Upside[] {
 export function priceByYear(company: Company, s: Scenario, quote?: Quote): { year: number; price: number | null; upside: number | null }[] {
   return [2026, 2027, 2028, 2029, 2030].map((year) => {
     const sc = { ...s, year };
-    const v = valuation(blocks(company, sc), sc, quote);
+    const v = valuation(blocks(company, sc), sc, quote, company.model);
     return { year, price: v.price, upside: v.upside };
   });
 }
