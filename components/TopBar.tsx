@@ -22,8 +22,7 @@ export function TopBar({ quotes }: { quotes: Pick<Quote, "ticker" | "price" | "c
     <header className="topbar">
       <div className="wrap topbar-row">
         <Link href={href("/")} className="brand">
-          <span className="brand-mark">PSP</span>
-          <span>Power to Compute <small>· miners turned AI landlords</small></span>
+          Power to Compute
         </Link>
         <nav className="nav-links">
           {links.map((l) => {
