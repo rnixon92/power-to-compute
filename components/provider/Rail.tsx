@@ -9,7 +9,7 @@ import { useScenario } from "@/components/ScenarioProvider";
 import { Delta, Segmented, Slider, Tweened } from "@/components/ui";
 import { PresetPicker } from "@/components/ScenarioControls";
 
-export function Rail({ company, quote, value, leaseHint }: { company: Company; quote?: Quote; value: Valuation; leaseHint: number }) {
+export function Rail({ company, quote, value, leaseHint, years }: { company: Company; quote?: Quote; value: Valuation; leaseHint: number; years: { year: number; price: number | null; upside: number | null }[] }) {
   const { scenario: s, set, replace } = useScenario();
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -50,8 +50,16 @@ export function Rail({ company, quote, value, leaseHint }: { company: Company; q
             <button type="button" className="btn ghost" onClick={() => replace({ ...defaultScenario })}>Reset</button>
           </div>
           <div>
-            <div className="slider-top" style={{ marginBottom: 6 }}><span>Value the run-rate at end of</span></div>
-            <Segmented label="Valuation year" size="sm" value={s.year} onChange={(y) => set({ year: y })} options={[2026, 2027, 2028, 2029, 2030].map((y) => ({ value: y, label: String(y) }))} />
+            <div className="slider-top" style={{ marginBottom: 8 }}><span>Implied today, valuing the run-rate at the end of</span></div>
+            <div className="year-strip" role="radiogroup" aria-label="Valuation year">
+              {years.map((y) => (
+                <button key={y.year} type="button" role="radio" aria-checked={y.year === s.year} className={y.year === s.year ? "on" : ""} onClick={() => set({ year: y.year })}>
+                  <span>{y.year}</span>
+                  <b>{y.price != null && y.price > 0 ? `$${y.price >= 100 ? y.price.toFixed(0) : y.price.toFixed(2)}` : "—"}</b>
+                </button>
+              ))}
+            </div>
+            <small className="note" style={{ display: "block", marginTop: 8 }}>Later years count more capacity but are discounted for longer.</small>
           </div>
           <div style={{ display: "grid", gap: 8 }}>
             <div className="slider-top"><span>Multiple on</span></div>

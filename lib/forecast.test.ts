@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { book, companies, companyByTicker } from "@/data/ledger";
-import { blocks, disclosedLeaseRate, pointAt, signedMw, sumTiers, valuation, yearTable } from "@/lib/forecast";
+import { blocks, disclosedLeaseRate, marketMultiple, pointAt, priceByYear, signedMw, sumTiers, upside, valuation, yearTable } from "@/lib/forecast";
 import { decodeScenario, defaultScenario, encodeScenario, presets, type Scenario } from "@/lib/scenario";
 
 const s = defaultScenario;
@@ -111,5 +111,31 @@ describe("scenario URL", () => {
 
   it("writes nothing for the default", () => {
     expect(encodeScenario(s)).toBe("");
+  });
+});
+
+describe("explaining the price", () => {
+  const quote = { shares: 400e6, price: 11 } as never;
+
+  it("solves the multiple that lands on today's price", () => {
+    const wulf = companyByTicker("WULF")!;
+    const v = valuation(blocks(wulf, s), s, quote);
+    const m = marketMultiple(v, s, quote)!;
+    const at = valuation(blocks(wulf, { ...s, multiple: m }), { ...s, multiple: m }, quote);
+    expect(at.price!).toBeCloseTo(11, 6);
+  });
+
+  it("prices Muskie as upside that grows once it is built", () => {
+    const rows = upside(companyByTicker("WULF")!, s, quote);
+    const m1 = rows.find((r) => r.block.ramp.id === "wulf-muskie-1")!;
+    expect(m1.builtYear).toBe(2029);
+    expect(m1.addBuilt!).toBeGreaterThan(m1.addNow!);
+    expect(rows.every((r) => !r.block.enabled)).toBe(true);
+  });
+
+  it("gives one price per valuation year", () => {
+    const rows = priceByYear(companyByTicker("HUT")!, s, quote);
+    expect(rows.map((r) => r.year)).toEqual([2026, 2027, 2028, 2029, 2030]);
+    expect(rows.find((r) => r.year === s.year)!.price).toBeCloseTo(valuation(blocks(companyByTicker("HUT")!, s), s, quote).price!, 6);
   });
 });

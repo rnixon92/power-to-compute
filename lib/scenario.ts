@@ -38,15 +38,15 @@ export const TIERS: Tier[] = ["live", "contracted", "announced", "pipeline"];
 export const tierLabel: Record<Tier, string> = {
   live: "In service",
   contracted: "Signed",
-  announced: "Announced",
-  pipeline: "Pipeline",
+  announced: "No tenant yet",
+  pipeline: "Future option",
 };
 
 export const tierBlurb: Record<Tier, string> = {
-  live: "Built, handed over and earning.",
-  contracted: "Tenant signed, still being built or handed over.",
-  announced: "Power and a date from the company, tenant still open.",
-  pipeline: "Power the company controls, with timing we estimate.",
+  live: "Built, handed over and earning rent.",
+  contracted: "Tenant signed. Still being built or handed over.",
+  announced: "The company has the power and a date. It still needs a tenant.",
+  pipeline: "Power the company controls, on a timeline we estimate.",
 };
 
 export const defaultScenario: Scenario = {
@@ -99,7 +99,7 @@ export const presets: Record<PresetId, { label: string; blurb: string; apply: (s
   },
   bull: {
     label: "Bull",
-    blurb: "Announced sites get leased on time at higher rents and 25× earnings.",
+    blurb: "Sites with no tenant yet get leased on time, at higher rents and 25× earnings.",
     apply: (s) => ({
       ...s,
       tiers: { live: true, contracted: true, announced: true, pipeline: false },

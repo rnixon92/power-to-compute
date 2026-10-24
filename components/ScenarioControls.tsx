@@ -1,7 +1,7 @@
 "use client";
 
 import type { Ramp } from "@/data/types";
-import { TIERS, matchPreset, presets, tierLabel, type PresetId } from "@/lib/scenario";
+import { TIERS, matchPreset, presets, tierBlurb, tierLabel, type PresetId } from "@/lib/scenario";
 import { tierVar } from "@/lib/palette";
 import { mw } from "@/lib/format";
 import { useScenario } from "@/components/ScenarioProvider";
@@ -27,7 +27,7 @@ export function TierToggles({ ramps }: { ramps: Ramp[] }) {
             aria-pressed={state === "mixed" ? "mixed" : state}
             style={{ "--tier-color": tierVar(tier) } as React.CSSProperties}
             onClick={() => setTier(tier, state !== true, ramps)}
-            title={state === "mixed" ? "Some sites in this group are switched individually" : undefined}
+            title={state === "mixed" ? `${tierBlurb[tier]} Some sites in this group are switched individually.` : tierBlurb[tier]}
           >
             <span className="box">
               {state === true ? <svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 5.2 4.2 7.4 8 3" stroke="var(--page)" strokeWidth="1.8" fill="none" /></svg> : state === "mixed" ? <svg width="8" height="2"><rect width="8" height="2" fill="currentColor" /></svg> : null}

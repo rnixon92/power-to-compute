@@ -16,7 +16,7 @@ export default function MethodPage() {
         <h2>The ledger</h2>
         <p>Sites, phases, tenants, rents, build costs and debt live in one hand-reviewed file, each with a source and a review date. When a company files a new 8-K, 10-Q or 10-K, the page flags it. Numbers change only once someone reads the filing.</p>
         <p>Every phase that can earn money is a ramp: a block of capacity with a start date, a date it&apos;s fully online, and whatever the company has said about rent, margin and cost. Ramps sit in four groups.</p>
-        <p><b>In service</b> is built and earning. <b>Signed</b> has a tenant and is still being built or handed over. <b>Announced</b> has power and a date from the company, with the tenant still open. <b>Pipeline</b> is power the company controls, on a timeline we estimate. The first two are on by default.</p>
+        <p><b>In service</b> is built and earning. <b>Signed</b> has a tenant and is still being built or handed over. <b>No tenant yet</b> has power and a date from the company, and still needs a lease. <b>Future option</b> is power the company controls, on a timeline we estimate. The first two are on by default, and each company page lists what the other two would add.</p>
 
         <h2>Units</h2>
         <p>The model works in critical IT megawatts, the power available to servers. Where a company quotes gross or utility power, the model converts it at 0.70 IT MW per gross MW. Helios, River Bend, Beacon Point and Polaris Forge 3 all sit between 0.67 and 0.74. You can change the factor.</p>
@@ -30,7 +30,7 @@ export default function MethodPage() {
         <p>The model values the AI data-center business only. Bitcoin mining, coin holdings, cash and other assets sit outside it, and each company page names what&apos;s left out. For MARA, which has no signed AI lease yet, that&apos;s most of the share price.</p>
 
         <h2>Presets</h2>
-        <p><b>Bear</b> keeps signed capacity only, pushes every future delivery out six months, cuts rents 15% and uses 14× earnings. <b>Base</b> is the default. <b>Bull</b> assumes announced sites are leased on time, with rents up 10%, at 25×.</p>
+        <p><b>Bear</b> keeps signed capacity only, pushes every future delivery out six months, cuts rents 15% and uses 14× earnings. <b>Base</b> is the default. <b>Bull</b> assumes sites with no tenant yet get leased on time, with rents up 10%, at 25×.</p>
       </div>
     </main>
   );

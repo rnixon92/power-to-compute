@@ -12,6 +12,8 @@ interface Ctx {
   replace: (next: Scenario) => void;
   toggleRamp: (ramp: Ramp) => void;
   setTier: (tier: Tier, on: boolean, ramps: Ramp[]) => void;
+  /** Switch a set of ramps on or off individually, leaving the tier defaults alone. */
+  setRamps: (ramps: Ramp[], on: boolean) => void;
   query: string;
 }
 
@@ -58,7 +60,20 @@ export function ScenarioProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
-  const value = useMemo(() => ({ scenario, set, replace, toggleRamp, setTier, query }), [scenario, set, replace, toggleRamp, setTier, query]);
+  const setRamps = useCallback((ramps: Ramp[], value: boolean) => {
+    setScenario((s) => {
+      let on = s.on.filter((id) => !ramps.some((r) => r.id === id));
+      let off = s.off.filter((id) => !ramps.some((r) => r.id === id));
+      for (const r of ramps) {
+        if (s.tiers[r.tier] === value) continue;
+        if (value) on = [...on, r.id];
+        else off = [...off, r.id];
+      }
+      return { ...s, on, off };
+    });
+  }, []);
+
+  const value = useMemo(() => ({ scenario, set, replace, toggleRamp, setTier, setRamps, query }), [scenario, set, replace, toggleRamp, setTier, setRamps, query]);
   return <ScenarioContext.Provider value={value}>{children}</ScenarioContext.Provider>;
 }
 

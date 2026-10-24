@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { book, watchlist } from "@/data/ledger";
 import type { Company, MarketBook, Tier } from "@/data/types";
-import { backlog, blocks, liveMw, series, signedMw, sumTiers, tierMw, TODAY, valuation, type Point, type Valuation } from "@/lib/forecast";
+import { backlog, blocks, liveMw, marketMultiple, series, signedMw, sumTiers, tierMw, TODAY, valuation, type Point, type Valuation } from "@/lib/forecast";
 import { TIERS, tierLabel } from "@/lib/scenario";
 import { companyVar, tierVar } from "@/lib/palette";
 import { mw, mwTick, px, usdCompact, usdTick } from "@/lib/format";
@@ -25,9 +25,10 @@ interface Row {
   live: number;
   tiers: Record<Tier, number>;
   cap: number | null;
+  multiple: number | null;
 }
 
-type SortKey = "ticker" | "cap" | "signed" | "perMw" | "revenue" | "implied" | "upside";
+type SortKey = "ticker" | "cap" | "signed" | "perMw" | "revenue" | "implied" | "upside" | "multiple";
 
 export function BoardView({ market, states, pins, mapSize }: { market: MarketBook; states: string[]; pins: Pin[]; mapSize: [number, number] }) {
   const { scenario, set } = useScenario();
@@ -42,10 +43,12 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
       book.map((company) => {
         const quote = quoteFor(market, company.ticker);
         const list = blocks(company, scenario);
+        const value = valuation(list, scenario, quote);
         return {
           company,
           points: series(list, scenario),
-          value: valuation(list, scenario, quote),
+          value,
+          multiple: marketMultiple(value, scenario, quote),
           signed: signedMw(company, scenario),
           live: liveMw(company, scenario),
           tiers: tierMw(company, scenario),
@@ -78,6 +81,7 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
         case "revenue": return sumTiers(r.value.target.revenue);
         case "implied": return r.value.price ?? -Infinity;
         case "upside": return r.value.upside ?? -Infinity;
+        case "multiple": return r.multiple ?? Infinity;
       }
     };
     const av = v(a);
@@ -127,7 +131,7 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 10 }}>
               <div>
                 <h2 style={{ fontSize: 18 }}>{metric === "mw" ? "Critical IT online, by company" : "Annual revenue run-rate, by company"}</h2>
-                <p className="note" style={{ marginTop: 2 }}>Each company&apos;s ramp stacked on the dates it gave. The dotted line adds every announced and pipeline site.</p>
+                <p className="note" style={{ marginTop: 2 }}>Each company&apos;s ramp stacked on the dates it gave. The dotted line adds every site with no tenant yet and every future option.</p>
               </div>
               <div className="legend">
                 {rows.map((r) => (
@@ -185,7 +189,7 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
         <div className="section-head">
           <div>
             <h2>Relative value</h2>
-            <p>What the market pays for each signed megawatt today, and what your scenario says each share is worth.</p>
+            <p>What the market pays for each signed megawatt, what your scenario says each share is worth, and the {scenario.basis === "pe" ? "earnings" : "EBITDA"} multiple today&apos;s price implies. Your scenario uses {scenario.multiple}×.</p>
           </div>
           <Segmented label="Valuation year" value={scenario.year} onChange={(y) => set({ year: y })} options={[2026, 2027, 2028, 2029, 2030].map((y) => ({ value: y, label: String(y) }))} />
         </div>
@@ -201,6 +205,7 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
                   {th("revenue", `Run-rate ${scenario.year}`)}
                   {th("implied", "Implied")}
                   {th("upside", "vs last")}
+                  {th("multiple", "Market pays")}
                 </tr>
               </thead>
               <tbody>
@@ -220,7 +225,8 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
                       <td className="r">{r.cap && r.signed ? usdCompact(r.cap / r.signed) : "—"}</td>
                       <td className="r">{usdCompact(sumTiers(r.value.target.revenue))}</td>
                       <td className="r"><b>{r.value.price != null && r.value.price > 0 ? px(r.value.price) : "—"}</b></td>
-                      <td className="r">{r.value.price != null && r.value.price > 0 ? <Delta value={(r.value.upside ?? 0) * 100} digits={0} /> : <span className="muted">no HPC</span>}</td>
+                      <td className="r">{r.value.price != null && r.value.price > 0 ? <Delta value={(r.value.upside ?? 0) * 100} digits={0} /> : <span className="muted">no lease</span>}</td>
+                      <td className="r">{r.multiple != null ? `${r.multiple.toFixed(1)}×` : "—"}</td>
                     </tr>
                   );
                 })}

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { book } from "@/data/ledger";
 import type { Company, MarketBook } from "@/data/types";
-import { backlog, blocks as toBlocks, disclosedLeaseRate, liveMw, pricePath, series, signedMw, sumTiers, TODAY, valuation, yearTable } from "@/lib/forecast";
+import { backlog, blocks as toBlocks, disclosedLeaseRate, liveMw, marketMultiple, priceByYear, pricePath, series, signedMw, sumTiers, TODAY, valuation, yearTable } from "@/lib/forecast";
 import { companyVar } from "@/lib/palette";
 import { isoToLabel, mw, px, usdCompact } from "@/lib/format";
 import { quoteFor } from "@/lib/quotes";
@@ -16,6 +16,7 @@ import { UsMap, type Pin } from "@/components/charts/UsMap";
 import { Rail } from "@/components/provider/Rail";
 import { Sites } from "@/components/provider/Sites";
 import { Contracts, Financing, Sources, YearTable } from "@/components/provider/Sections";
+import { Summary } from "@/components/provider/Summary";
 
 const modelLabel = { "gpu-cloud": "GPU cloud", "colo-lease": "Data-center landlord", "power-owner": "Power portfolio" } as const;
 
@@ -43,6 +44,8 @@ export function ProviderView({ company, market, states, pins, mapSize }: { compa
   const path = useMemo(() => pricePath(points, scenario, quote?.shares ?? null), [points, scenario, quote]);
   const rows = useMemo(() => yearTable(list, scenario, quote?.shares ?? null), [list, scenario, quote]);
   const leaseHint = useMemo(() => disclosedLeaseRate(book), []);
+  const years = useMemo(() => priceByYear(company, scenario, quote), [company, scenario, quote]);
+  const multiple = marketMultiple(value, scenario, quote);
   const active = useScrollSpy(SECTION_IDS);
 
   const signed = signedMw(company, scenario);
@@ -101,7 +104,8 @@ export function ProviderView({ company, market, states, pins, mapSize }: { compa
       <div className="wrap p-body">
         <div className="p-main">
           <section id="forecast">
-            <div className="card fc">
+            <Summary company={company} quote={quote} value={value} multiple={multiple} />
+            <div className="card fc" style={{ marginTop: 14 }}>
               <div className="fc-head">
                 <div>
                   <h2>Price, capacity and revenue on one timeline</h2>
@@ -160,7 +164,7 @@ export function ProviderView({ company, market, states, pins, mapSize }: { compa
             <p className="note" style={{ marginTop: 14 }}><Link className="link" href={href("/method")}>How the model works</Link></p>
           </section>
         </div>
-        <Rail company={company} quote={quote} value={value} leaseHint={leaseHint} />
+        <Rail company={company} quote={quote} value={value} leaseHint={leaseHint} years={years} />
       </div>
     </main>
   );

@@ -298,3 +298,63 @@ export function leaseRateOf(b: Block): number | null {
   if (!b.itMw || b.capexKind === "gpu") return null;
   return b.revenue / b.itMw / 1000 / 12;
 }
+
+/**
+ * The multiple that makes your scenario land exactly on today's share price.
+ * Price is linear in the multiple, so this solves directly. Null when earnings (or EBITDA) are not positive.
+ */
+export function marketMultiple(v: Valuation, s: Scenario, quote?: Quote): number | null {
+  if (!quote?.price || !v.shares) return null;
+  const equityToday = quote.price * v.shares * Math.pow(1 + s.discount, v.years);
+  if (s.basis === "pe") return v.target.earnings > 0 ? equityToday / v.target.earnings : null;
+  return v.target.noi > 0 ? (equityToday + v.target.debt) / v.target.noi : null;
+}
+
+export interface Upside {
+  block: Block;
+  /** Year the block is fully online, held inside the forecast window. */
+  builtYear: number;
+  /** Change in implied price today if switched on, valued at your year. */
+  addNow: number | null;
+  /** Same, valued once the block is fully online. */
+  addBuilt: number | null;
+}
+
+function priceWith(company: Company, s: Scenario, quote: Quote | undefined, year: number): number | null {
+  const sc = { ...s, year };
+  return valuation(blocks(company, sc), sc, quote).price;
+}
+
+/** What each switched-off ramp would add per share, largest first. */
+export function upside(company: Company, s: Scenario, quote?: Quote): Upside[] {
+  const list = blocks(company, s);
+  const off = list.filter((b) => !b.enabled);
+  if (!off.length) return [];
+  const baseAt = new Map<number, number | null>();
+  const base = (year: number) => {
+    if (!baseAt.has(year)) baseAt.set(year, priceWith(company, s, quote, year));
+    return baseAt.get(year) ?? null;
+  };
+  const diff = (a: number | null, b: number | null) => (a == null || b == null ? null : a - b);
+  return off
+    .map((b) => {
+      const builtYear = Math.min(2030, Math.max(s.year, new Date(b.full).getUTCFullYear()));
+      const withIt = { ...s, on: [...s.on, b.ramp.id], off: s.off.filter((id) => id !== b.ramp.id) };
+      return {
+        block: b,
+        builtYear,
+        addNow: diff(priceWith(company, withIt, quote, s.year), base(s.year)),
+        addBuilt: diff(priceWith(company, withIt, quote, builtYear), base(builtYear)),
+      };
+    })
+    .sort((a, b) => (b.addBuilt ?? 0) - (a.addBuilt ?? 0));
+}
+
+/** Implied price today for each valuation year, for the year strip. */
+export function priceByYear(company: Company, s: Scenario, quote?: Quote): { year: number; price: number | null; upside: number | null }[] {
+  return [2026, 2027, 2028, 2029, 2030].map((year) => {
+    const sc = { ...s, year };
+    const v = valuation(blocks(company, sc), sc, quote);
+    return { year, price: v.price, upside: v.upside };
+  });
+}
