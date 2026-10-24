@@ -13,6 +13,7 @@ import { ForecastChart } from "@/components/charts/ForecastChart";
 import { UsMap, type Pin } from "@/components/charts/UsMap";
 import { PriceBridge, Summary } from "@/components/provider/Summary";
 import { EventList } from "@/components/EventList";
+import { BuildCalendar } from "@/components/BuildCalendar";
 import { allEvents } from "@/lib/events";
 import { Sites } from "@/components/provider/Sites";
 import { BalanceSheet, Contracts, Financing, Sources, YearTable } from "@/components/provider/Sections";
@@ -152,6 +153,12 @@ export function ProviderView({ company, market, states, pins, mapSize }: { compa
           </section>
 
           <section id="timeline">
+            {signed > 0 ? (
+              <>
+                <div className="section-head"><div><h2>Coming up</h2><p>Each go-live by quarter for the sites switched on. The shaded column is this quarter.</p></div></div>
+                <div style={{ marginBottom: 32 }}><BuildCalendar companies={[company]} single /></div>
+              </>
+            ) : null}
             <div className="section-head"><div><h2>Timeline</h2><p>What {company.name} has announced, newest first, with how the stock moved over the next five trading days.</p></div></div>
             <EventList events={allEvents([company])} market={market} />
           </section>
