@@ -1,0 +1,28 @@
+name: Refresh market
+
+on:
+  schedule:
+    # 21:15 UTC, after the US cash close, weekdays.
+    - cron: "15 21 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run refresh
+      - name: Commit snapshot
+        run: |
+          git config user.name "psp-refresh"
+          git config user.email "psp-refresh@users.noreply.github.com"
+          git add data/snapshots/market.json
+          git diff --staged --quiet || git commit -m "Refresh Nasdaq prices and Street targets"
+          git push
