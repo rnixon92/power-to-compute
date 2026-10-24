@@ -168,9 +168,12 @@ export function scenarioChip(s: Scenario): { main: string; scope: string } {
   else if (s.tiers.contracted) parts.push("Signed, not yet running");
   if (s.tiers.announced) parts.push("no tenant");
   if (s.tiers.pipeline) parts.push("options");
+  const odds = `${Math.round(s.leaseOdds * 100)}%`;
   let scope = parts.join(" + ") || "No sites";
-  if (s.tiers.announced || s.tiers.pipeline || s.on.length) scope += ` at ${Math.round(s.leaseOdds * 100)}%`;
-  if (s.on.length || s.off.length) scope += ", custom";
+  // The chance applies only to unsigned power, so it sits next to that part of the scope.
+  if (s.tiers.announced || s.tiers.pipeline) scope += ` at ${odds}`;
+  else if (s.on.length) scope += ` + ${s.on.length} unsigned site${s.on.length > 1 ? "s" : ""} at ${odds}`;
+  if (s.off.length) scope += `, ${s.off.length} switched off`;
   return { main, scope };
 }
 
