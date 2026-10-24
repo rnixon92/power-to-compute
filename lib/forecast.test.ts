@@ -197,7 +197,7 @@ describe("lease DCF", () => {
     const hut = companyByTicker("HUT")!;
     const v = valuation(hut, blocks(hut, s), s, ctx);
     expect(v.dcf).toBeDefined();
-    expect(v.aiToday).toBeCloseTo(v.dcf!.operating - v.dcf!.capex + v.dcf!.terminal, 0);
+    expect(v.aiToday).toBeCloseTo(v.dcf!.operating + v.dcf!.shield - v.dcf!.capex + v.dcf!.terminal, 0);
     expect(v.equity).toBeCloseTo(v.aiToday + v.ai.otherValue + v.bridge.net, 0);
     expect(v.bridge.lines.map((l) => l.label)).not.toContain("Build cost still to spend");
   });
@@ -222,6 +222,16 @@ describe("lease DCF", () => {
     const r = impliedReturn(wulf, s, ctx)!;
     const at = { ...s, dcfRate: r };
     expect(valuation(wulf, blocks(wulf, at), at, ctx).price!).toBeCloseTo(11, 4);
+  });
+
+  it("counts the tax saved on interest, and only while there is profit to shield", () => {
+    const hut = companyByTicker("HUT")!;
+    const v = valuation(hut, blocks(hut, s), s, ctx);
+    expect(v.dcf!.shield).toBeGreaterThan(0);
+    // Never more than tax on the full interest bill, run off over 15 years and undiscounted.
+    expect(v.dcf!.shield).toBeLessThan(hut.balance!.interest! * s.tax * 15);
+    const noTax = { ...s, tax: 0 };
+    expect(valuation(hut, blocks(hut, noTax), noTax, ctx).dcf!.shield).toBe(0);
   });
 
   it("keeps IREN on earnings", () => {

@@ -186,6 +186,7 @@ export function PriceBridge({ company, value }: { company: Company; value: Valua
             {basis === "dcf" && value.dcf ? (
               <>
                 <div title="Each month to 2050, after overhead and tax, discounted at your required return."><span>Lease cash flows to 2050</span><b>{usdCompact(value.dcf.operating)}</b></div>
+                {value.dcf.shield > 0 ? <div title={company.balance?.interestNote}><span>Tax saved on interest</span><b>+{usdCompact(value.dcf.shield)}</b></div> : null}
                 <div title="Spent month by month as each campus is built."><span>Build cost as it is spent</span><b>−{usdCompact(value.dcf.capex)}</b></div>
                 <div title="NOI in 2050 divided by the exit cap rate, discounted."><span>Sites at a {(s.exitCap * 100).toFixed(1)}% cap rate in 2050</span><b>{usdCompact(value.dcf.terminal)}</b></div>
               </>

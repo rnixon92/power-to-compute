@@ -153,6 +153,9 @@ export interface Balance {
   /** Every borrowing, including convertible notes and finance leases, at carrying amount. */
   debt: number;
   debtNote: string;
+  /** Annual interest cost on that debt, expensed and capitalized, from the latest quarter. Drives the tax saved on interest. */
+  interest?: number;
+  interestNote?: string;
   /** Other claims ahead of common shareholders: warrants, minority interests, preferred stock. */
   claims?: BalanceLine[];
   /**
