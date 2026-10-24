@@ -2,7 +2,8 @@ import { BTC_JUN30 } from "@/data/ledger";
 import type { Company, MarketBook, Quote, Ramp, Tier } from "@/data/types";
 import { appliedBasis, TIERS, type Scenario } from "@/lib/scenario";
 
-export const TODAY = new Date().toISOString().slice(0, 10);
+/** The build date on the static site, so every page agrees. Falls back to the clock in tests and scripts. */
+export const TODAY = process.env.NEXT_PUBLIC_TODAY || new Date().toISOString().slice(0, 10);
 export const HORIZON_END = "2030-12-31";
 
 const DAY = 86_400_000;

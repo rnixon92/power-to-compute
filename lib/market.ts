@@ -73,6 +73,13 @@ async function fetchBtc(): Promise<MarketBook["btc"]> {
   }
 }
 
+/** The saved snapshot, for the static build. `npm run refresh` writes it. */
+export async function readMarket(): Promise<MarketBook> {
+  const snap = await readSnap();
+  if (!snap) throw new Error("No market snapshot. Run `npm run refresh` first.");
+  return snap;
+}
+
 async function readSnap(): Promise<MarketBook | null> {
   try {
     const raw = await fs.readFile(SNAP, "utf8");

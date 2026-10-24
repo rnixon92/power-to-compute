@@ -10,7 +10,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm test",
-    "refresh": "tsx scripts/refresh-market.ts"
+    "refresh": "tsx --tsconfig tsconfig.json scripts/refresh.ts"
   },
   "dependencies": {
     "d3-geo": "^3.1.1",

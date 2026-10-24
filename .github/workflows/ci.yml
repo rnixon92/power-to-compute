@@ -1,8 +1,7 @@
 name: CI
 
+# Pull requests only. Pushes to main are tested and built by the deploy workflow.
 on:
-  push:
-    branches: [main]
   pull_request:
 
 jobs:

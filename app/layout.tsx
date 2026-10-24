@@ -4,10 +4,9 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Assumptions } from "@/components/Assumptions";
 import { ScenarioProvider } from "@/components/ScenarioProvider";
 import { TopBar } from "@/components/TopBar";
-import { getMarket } from "@/lib/market";
+import { readMarket } from "@/lib/market";
 import "./globals.css";
 
-export const dynamic = "force-dynamic";
 
 const sans = Geist({ subsets: ["latin"], variable: "--font-sans" });
 const mono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" });
@@ -31,7 +30,7 @@ export const viewport = {
 const themeScript = `try{var t=localStorage.getItem("psp-theme");if(t)document.documentElement.dataset.theme=t}catch(e){}`;
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const market = await getMarket();
+  const market = await readMarket();
   const quotes = market.quotes.map(({ ticker, price, changePercent }) => ({ ticker, price, changePercent }));
   return (
     <html lang="en" suppressHydrationWarning>

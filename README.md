@@ -28,11 +28,11 @@ npm run dev        # http://localhost:3000
 | `npm test` | Model tests (Vitest) |
 | `npm run typecheck` | TypeScript |
 | `npm run check` | Both of the above |
-| `npm run refresh` | Pull fresh prices from Nasdaq into `data/snapshots/market.json` |
+| `npm run refresh` | Fetch prices (Nasdaq), bitcoin (Coinbase) and the latest SEC filings into `data/snapshots/` |
 
 ## How data flows
 
-**Prices update on their own.** `lib/nasdaq.ts` pulls last sale, a rolling year of closes, market cap, 52-week range and Street targets from Nasdaq's public endpoints. `lib/market.ts` holds a pull for 15 minutes and falls back to the saved snapshot if Nasdaq is slow. The `refresh-market` GitHub Action saves a new snapshot after each weekday close.
+**Prices update on a schedule.** The site is static. `npm run refresh` pulls last sale, a rolling year of closes, market cap, 52-week range and Street targets from Nasdaq's public endpoints, bitcoin from Coinbase, and each company's latest SEC filing, into `data/snapshots/`. The build bakes those in. Locally, run `npm run refresh` to update the numbers on the dev server.
 
 **The ledger is read by a person.** `data/ledger.ts` holds every company, campus, phase, ramp, contract, build cost and financing line, each tied to a source with a date. `lib/edgar.ts` checks SEC EDGAR for filings newer than each company's `reviewedAt` date and flags them on the company page. Numbers only change when someone reads the filing and edits the ledger.
 
@@ -56,6 +56,18 @@ Two rules keep the totals honest:
 
 - **Count each megawatt once.** If a contract covers capacity already in a ramp (IREN's Microsoft deal sits inside its $4B ARR book), it goes in `deals` for display, never in a second ramp.
 - **Company figures win.** Fill a gap with an assumption only when the company hasn't given a number.
+
+## Deploying
+
+The site is a static export (`out/`) hosted on Cloudflare Pages. `.github/workflows/deploy.yml` runs on every push to `main`, hourly through the US trading day on weekdays, and once daily. Each run refreshes the snapshots, tests, builds and uploads. If Nasdaq or EDGAR does not answer, the build uses the last committed snapshot. The daily run commits the snapshot back to the repo.
+
+One-time setup:
+
+1. Create the Pages project: `npx wrangler login`, then `npx wrangler pages project create power-to-compute --production-branch=main`.
+2. In Cloudflare, create an API token with **Account › Cloudflare Pages › Edit**.
+3. Add two repository secrets: `gh secret set CLOUDFLARE_API_TOKEN` and `gh secret set CLOUDFLARE_ACCOUNT_ID` (the account ID is on the Cloudflare dashboard).
+
+To deploy by hand: `npm run refresh && npm run build && npx wrangler pages deploy out --project-name=power-to-compute`.
 
 ## Design
 

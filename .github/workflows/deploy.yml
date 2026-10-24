@@ -1,0 +1,54 @@
+name: Refresh and deploy
+
+# Rebuilds the static site with fresh prices and filings, then uploads it to Cloudflare Pages.
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Hourly through the US session and just after the close, weekdays (14:05–21:05 UTC).
+    - cron: "5 14-21 * * 1-5"
+    # Once a day, every day, so filings and bitcoin stay current over weekends.
+    - cron: "30 11 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+
+      # If Nasdaq or EDGAR does not answer, the build uses the last committed snapshot.
+      - name: Refresh prices and filings
+        run: npm run refresh
+        continue-on-error: true
+
+      - run: npm test
+      - run: npm run build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy out --project-name=power-to-compute --branch=main --commit-dirty=true
+
+      # Keep the snapshot in the repo after the daily run, so local builds and fallbacks stay recent.
+      - name: Save snapshot
+        if: github.event.schedule == '30 11 * * *'
+        run: |
+          git config user.name "psp-refresh"
+          git config user.email "psp-refresh@users.noreply.github.com"
+          git add data/snapshots
+          git diff --staged --quiet || git commit -m "Refresh price and filing snapshot"
+          git push

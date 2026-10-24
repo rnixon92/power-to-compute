@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import type { CapitalItem, Company } from "@/data/types";
 import type { Filing } from "@/lib/edgar";
+import filingSnapshot from "@/data/snapshots/filings.json";
 import { leaseRateOf, type Block, type Valuation, type YearRow } from "@/lib/forecast";
 import { tierLabel } from "@/lib/scenario";
 import { tierVar } from "@/lib/palette";
@@ -169,22 +169,17 @@ export function YearTable({ rows, gpu }: { rows: YearRow[]; gpu: boolean }) {
 }
 
 export function Sources({ company }: { company: Company }) {
-  const [filings, setFilings] = useState<Filing[] | null>(null);
-  useEffect(() => {
-    fetch("/api/filings")
-      .then((r) => r.json())
-      .then((b: { filings: Filing[] }) => setFilings(b.filings.filter((f) => f.ticker === company.ticker)))
-      .catch(() => setFilings([]));
-  }, [company.ticker]);
+  // Checked against SEC EDGAR when the site is built.
+  const filings: Filing[] | null = (filingSnapshot.filings as Filing[]).filter((f) => f.ticker === company.ticker);
   const unread = filings?.filter((f) => f.unread) ?? [];
   return (
     <>
       <div className="card card-pad" style={{ marginBottom: 12 }}>
         <div className="flag-bar">
-          {filings == null ? <span>Checking SEC EDGAR…</span> : unread.length ? (
+          {unread.length ? (
             <span className="warn">New filing since the last review on {isoToLabel(company.reviewedAt)}. Figures here update once it&apos;s read.</span>
           ) : (
-            <span>Up to date with SEC EDGAR as of the {isoToLabel(company.reviewedAt)} review.</span>
+            <span>Up to date with SEC EDGAR as of the {isoToLabel(company.reviewedAt)} review, checked {isoToLabel(filingSnapshot.fetchedAt.slice(0, 10))}.</span>
           )}
           {filings?.map((f) => (
             <a key={`${f.form}-${f.date}`} className="link" href={f.url} target="_blank" rel="noreferrer">Latest {f.form}, {isoToLabel(f.date)}</a>
