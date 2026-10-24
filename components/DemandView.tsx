@@ -1,14 +1,35 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { scaleBand, scaleLinear } from "d3-scale";
 import { book } from "@/data/ledger";
-import { epriSource, epriTwh, goldman, goldmanBuildGap, lbnl2030, openRouter, openRouterRankings, sp, twhAverage2030 } from "@/data/studies";
+import {
+  azureGrowth,
+  bcgShare,
+  dominionPlan,
+  dominionQueue,
+  epriSource,
+  epriTwh,
+  ercotQueue,
+  goldman,
+  goldmanBuildGap,
+  lbnl2030,
+  nvidiaDc,
+  openaiScale,
+  openRouter,
+  openRouterRankings,
+  pjmLoad,
+  sp,
+  twhAverage2030,
+} from "@/data/studies";
 import { signedMw } from "@/lib/forecast";
+import { inventory, pileTotal, type InventoryItem, type Pile } from "@/lib/inventory";
 import { tenantRows } from "@/lib/tenants";
-import { useScenario } from "@/components/ScenarioProvider";
+import { useHref, useScenario } from "@/components/ScenarioProvider";
 import { useSize } from "@/components/ui";
-import { mw } from "@/lib/format";
+import { isoToLabel, mw } from "@/lib/format";
+import { UsMap, type Pin } from "@/components/charts/UsMap";
 
 interface LineSeries {
   key: string;
@@ -138,7 +159,7 @@ function AdditionsChart() {
           ))}
           {rows.map((r) => (
             <g key={r.year}>
-              <rect x={x(r.year)} y={y(r.gw)} width={x.bandwidth()} height={y(0) - y(r.gw)} rx={4} fill={r.kind === "Built" ? "var(--s1)" : "var(--s1)"} fillOpacity={r.kind === "Built" ? 0.9 : 0.35} stroke="var(--s1)" strokeDasharray={r.kind === "Built" ? undefined : "4 3"} />
+              <rect x={x(r.year)} y={y(r.gw)} width={x.bandwidth()} height={y(0) - y(r.gw)} rx={4} fill="var(--s1)" fillOpacity={r.kind === "Built" ? 0.9 : 0.35} stroke="var(--s1)" strokeDasharray={r.kind === "Built" ? undefined : "4 3"} />
               <text x={(x(r.year) ?? 0) + x.bandwidth() / 2} y={y(r.gw) - 6} textAnchor="middle" style={{ fill: "var(--ink)", fontWeight: 600 }}>{r.gw} GW</text>
               <text x={(x(r.year) ?? 0) + x.bandwidth() / 2} y={h - 8} textAnchor="middle">{r.year} · {r.kind.toLowerCase()}</text>
             </g>
@@ -152,10 +173,105 @@ function AdditionsChart() {
   );
 }
 
-export function DemandView() {
+/** OpenAI compute and revenue, each rebased to 2023. Same years, no shared unit. */
+function ScaleChart() {
+  const [ref, width] = useSize<HTMLDivElement>();
+  const [hover, setHover] = useState<number | null>(null);
+  const w = Math.max(260, width);
+  const h = 260;
+  const pad = { l: 36, r: 88, t: 16, b: 28 };
+  const baseC = openaiScale.points[0].computeGw;
+  const baseR = openaiScale.points[0].arrBn;
+  const lines: LineSeries[] = [
+    { key: "compute", label: "Compute", color: "var(--s1)", points: openaiScale.points.map((p) => ({ year: p.year, v: p.computeGw / baseC })) },
+    { key: "revenue", label: "Revenue", color: "var(--s2)", points: openaiScale.points.map((p) => ({ year: p.year, v: p.arrBn / baseR })) },
+  ];
+  const x = scaleLinear().domain([2023, 2025]).range([pad.l, w - pad.r]);
+  const y = scaleLinear().domain([0, 12]).range([h - pad.b, pad.t]);
+  const d = (pts: { year: number; v: number }[]) => pts.map((p, i) => `${i ? "L" : "M"}${x(p.year)},${y(p.v)}`).join("");
+
+  return (
+    <div className="chart" ref={ref}>
+      {width > 0 ? (
+        <svg
+          width={w}
+          height={h}
+          role="img"
+          aria-label="OpenAI compute and revenue, indexed to 2023"
+          onPointerLeave={() => setHover(null)}
+          onPointerMove={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            const yr = Math.round(x.invert(e.clientX - r.left));
+            setHover(yr >= 2023 && yr <= 2025 ? yr : null);
+          }}
+        >
+          {y.ticks(4).map((v) => (
+            <g key={v}>
+              <line className="grid" x1={pad.l} x2={w - pad.r} y1={y(v)} y2={y(v)} />
+              <text x={pad.l - 8} y={y(v) + 4} textAnchor="end">{v}×</text>
+            </g>
+          ))}
+          {[2023, 2024, 2025].map((yr) => <text key={yr} x={x(yr)} y={h - 8} textAnchor="middle">{yr}</text>)}
+          <line className="axis" x1={pad.l} x2={w - pad.r} y1={y(0)} y2={y(0)} />
+          {lines.map((l) => (
+            <g key={l.key}>
+              <path d={d(l.points)} fill="none" stroke={l.color} strokeWidth={2} />
+              {l.points.map((p) => <circle key={p.year} cx={x(p.year)} cy={y(p.v)} r={3.5} fill={l.color} stroke="var(--surface)" strokeWidth={2} />)}
+              <text x={x(2025) + 8} y={y(l.points[l.points.length - 1].v) + 4} style={{ fill: "var(--ink-2)", fontWeight: 550 }}>{l.label}</text>
+            </g>
+          ))}
+          {hover != null ? <line className="cross" x1={x(hover)} x2={x(hover)} y1={pad.t} y2={h - pad.b} /> : null}
+        </svg>
+      ) : (
+        <div style={{ height: h }} />
+      )}
+      {hover != null && width > 0 ? (
+        <div className="tip" style={{ left: Math.min(x(hover) + 12, w - 180), top: 8 }}>
+          <div className="tip-date">{hover}</div>
+          {lines.map((l) => {
+            const p = l.points.find((q) => q.year === hover);
+            const raw = openaiScale.points.find((q) => q.year === hover);
+            const detail = l.key === "compute" ? `${raw?.computeGw} GW` : `$${raw?.arrBn}B`;
+            return p ? <div className="tip-row" key={l.key}><i className="swatch line" style={{ background: l.color }} /><span>{l.label}</span><b>{p.v % 1 ? p.v.toFixed(1) : p.v}× · {detail}</b></div> : null;
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+const PILES: { id: Pile; label: string; color: string; hint: string }[] = [
+  { id: "ready", label: "Already running", color: "var(--s3)", hint: "The company says the power is available or online. No tenant is named." },
+  { id: "claimed", label: "A tenant has a claim", color: "var(--s4)", hint: "An option, a right of first offer, or exclusivity. Not a signed lease." },
+  { id: "open", label: "No tenant yet", color: "var(--s1)", hint: "Development sites, letters of intent, and mines the company has not called available." },
+];
+
+function PileList({ items, pile, href }: { items: InventoryItem[]; pile: Pile; href: (path: string) => string }) {
+  const rows = items.filter((i) => i.pile === pile);
+  const shown = rows.slice(0, 4);
+  const meta = PILES.find((p) => p.id === pile)!;
+  return (
+    <div className="card card-pad">
+      <div className="eyebrow" style={{ color: meta.color }}>{meta.label}</div>
+      <ul>
+        {shown.map((i) => (
+          <li key={i.id}>
+            <Link className="link" href={href(`/companies/${i.ticker}#site-${i.campus}`)}>{i.ticker} · {i.label}</Link>
+            <span>{mw(i.itMw)}</span>
+          </li>
+        ))}
+      </ul>
+      {rows.length > shown.length ? <p className="note" style={{ marginTop: 10 }}>{rows.length - shown.length} more in this pile.</p> : null}
+    </div>
+  );
+}
+
+export function DemandView({ states, pins, mapSize }: { states: string[]; pins: Pin[]; mapSize: [number, number] }) {
+  const href = useHref();
   const { scenario, showIren } = useScenario();
   const avg = twhAverage2030();
-  const epri2030 = epriTwh.find((p) => p.year === 2030)!;
+  const epri2024 = epriTwh[0].mid;
+  const multiple = avg.average / epri2024;
   const group = showIren ? book : book.filter((c) => c.model !== "gpu-cloud");
   const signedIt = group.reduce((a, c) => a + signedMw(c, scenario), 0);
   const signedUtility = signedIt / scenario.conversion;
@@ -167,24 +283,39 @@ export function DemandView() {
   const first = openRouter.points[0];
   const last = openRouter.points[openRouter.points.length - 1];
   const months = Math.round((Date.parse(last.weekOf) - Date.parse(first.weekOf)) / (30.44 * 86_400_000));
+  const tokenMultiple = Math.round(last.trillion / first.trillion);
+  const unsold = inventory(book, scenario);
+  const pileMax = Math.max(...PILES.map((p) => pileTotal(unsold, p.id)), 1);
+  const sellTickers = new Set(unsold.map((i) => i.ticker));
+  const openPins = pins.filter((p) => p.open > 0 && sellTickers.has(p.ticker));
+  const offMap = unsold.filter((i) => !i.plotted);
+  const offMapNames = [...new Map(offMap.map((i) => [i.campus, i])).values()];
 
   return (
     <main className="wrap">
       <section className="hero">
-        <h1>US data centers could use 2–4.5× their 2024 power by 2030.</h1>
+        <h1>Requests for power are running ahead of the power that gets connected.</h1>
         <p className="lede">
-          The studies put 2030 between {epri2030.low} and {lbnl2030.highTwh} TWh, against {epriTwh[0].mid} TWh in 2024. The build schedule for the next two years is about {Math.round(gap.scheduled / gap.built)}× what the last two years actually delivered.
+          Central cases put US data-center electricity near {Math.round(avg.average)} TWh in 2030, about {multiple.toFixed(1)}× the {epri2024} TWh EPRI counts for 2024.
+          PJM, Dominion and ERCOT are each holding a request list well beyond the 2030 plan.
+          Signed critical IT {showIren ? "in this book" : "for the landlords"} covers about {Math.round((signedUtility / 1000 / spGrowth) * 100)}% of S&amp;P&apos;s growth from 2025 to 2030.
         </p>
       </section>
 
       <div className="stats" style={{ marginTop: 28 }}>
-        <div className="stat"><span className="eyebrow">US data-center electricity, 2024</span><strong>{epriTwh[0].mid} TWh</strong><small>EPRI</small></div>
         <div className="stat"><span className="eyebrow">2030, average of central cases</span><strong>{Math.round(avg.average)} TWh</strong><small>{avg.left} and {avg.right}</small></div>
-        <div className="stat"><span className="eyebrow">Share of US power in 2030</span><strong>{Math.round(lbnl2030.shareLow * 100)}–{Math.round(lbnl2030.shareHigh * 100)}%</strong><small>LBNL range</small></div>
-        <div className="stat"><span className="eyebrow">Weekly AI tokens, OpenRouter</span><strong>{Math.round(last.trillion / first.trillion)}×</strong><small>in {months} months</small></div>
+        <div className="stat"><span className="eyebrow">Against 2024</span><strong>{multiple.toFixed(1)}×</strong><small>EPRI counted {epri2024} TWh in 2024. The 2030 studies span {epriTwh.find((p) => p.year === 2030)!.low}–{lbnl2030.highTwh} TWh.</small></div>
+        <div className="stat"><span className="eyebrow">PJM data-center peak growth</span><strong>{pjmLoad.dataCenterGw} GW</strong><small>Of {pjmLoad.peakGrowthGw} GW from {pjmLoad.from} to {pjmLoad.to}. The board says some may still go unmet.</small></div>
+        <div className="stat"><span className="eyebrow">Signed, share of S&amp;P growth</span><strong>{Math.round((signedUtility / 1000 / spGrowth) * 100)}%</strong><small>{mw(signedIt)} critical IT, {mw(signedUtility)} once scaled to utility power. S&amp;P adds {Math.round(spGrowth)} GW from 2025 to 2030.</small></div>
       </div>
 
       <section className="section">
+        <div className="section-head">
+          <div>
+            <h2>How large it gets</h2>
+            <p>EPRI and LBNL count electricity. Goldman and S&amp;P count power. The perimeters differ, so the two charts stay apart.</p>
+          </div>
+        </div>
         <div className="two-col">
           <div className="card card-pad">
             <h2 style={{ fontSize: 18 }}>Electricity used by US data centers</h2>
@@ -228,39 +359,45 @@ export function DemandView() {
       <section className="section">
         <div className="section-head">
           <div>
-            <h2>The shortfall</h2>
-            <p>Goldman&apos;s path to about {goldman.capacityEnd2027Gw} GW of capacity by the end of 2027, enough for {goldman.demandGw[goldman.demandGw.length - 1].gw} GW of demand at {goldman.utilization * 100}% utilization, is the schedule below. The last two years did not build at that pace.</p>
+            <h2>Two clocks</h2>
+            <p>Goldman is the next two years of construction. The grids are the 2030 plans, set next to the requests in their queues. A request is not a megawatt that will be served.</p>
           </div>
         </div>
         <div className="stats">
-          <div className="stat"><span className="eyebrow">Scheduled, 2026–27</span><strong>{gap.scheduled} GW</strong><small>{goldman.scheduledAdditionsGw.map((r) => `${r.gw} in ${r.year}`).join(", ")}</small></div>
-          <div className="stat"><span className="eyebrow">Actually built, 2024–25</span><strong>{gap.built} GW</strong><small>{goldman.realizedAdditionsGw.map((r) => `${r.gw} in ${r.year}`).join(", ")}</small></div>
-          <div className="stat"><span className="eyebrow">Gap if the pace holds</span><strong>{gap.gap.toFixed(1)} GW</strong><small>Schedule minus the last two years</small></div>
-          <div className="stat"><span className="eyebrow">Demand growth, 2025–27</span><strong>{gap.demandGrowth} GW</strong><small>Goldman, {goldman.demandGw[0].gw} GW to {goldman.demandGw[goldman.demandGw.length - 1].gw} GW</small></div>
+          <div className="stat">
+            <span className="eyebrow">PJM · data-center peak growth</span>
+            <strong>{pjmLoad.dataCenterGw} GW</strong>
+            <small>From {pjmLoad.from} to {pjmLoad.to}, inside {pjmLoad.peakGrowthGw} GW of total peak growth. October 2025. The board says some of it may still go unmet. No single shortfall number.</small>
+          </div>
+          <div className="stat">
+            <span className="eyebrow">Dominion · requests in the queue</span>
+            <strong>{dominionQueue.requestsGw} GW</strong>
+            <small>February 2026. The September 2026 forecast puts {dominionPlan.capacity2030Gw} GW of contract capacity in 2030, and {dominionPlan.demand2030Gw} GW of demand, because new contracts take about five years to fill. About {dominionQueue.datedThrough2031Gw} GW of the queue has a date through 2031. System peak was {dominionQueue.peakGw} GW.</small>
+          </div>
+          <div className="stat">
+            <span className="eyebrow">ERCOT · requests being watched</span>
+            <strong>{ercotQueue.requestsGw} GW</strong>
+            <small>December 2025, up from {ercotQueue.requestsPriorGw} GW a year earlier. Planners put about {ercotQueue.newDemand2030Gw} GW of new demand in the 2030 forecast. Much of the queue is duplicate or speculative.</small>
+          </div>
         </div>
-        <p className="note" style={{ marginTop: 12 }}>The {gap.gap.toFixed(1)} GW is not a second forecast. It is Goldman&apos;s own schedule minus what Goldman says was built in the previous two years. Demand over 2025–27 grows by {gap.demandGrowth} GW, so a build pace that stays at {gap.built} GW leaves the new demand uncovered.</p>
-      </section>
-
-      <section className="section">
-        <div className="two-col">
+        <div className="two-col" style={{ marginTop: 14 }}>
           <div className="card card-pad">
             <h2 style={{ fontSize: 18 }}>Built against the schedule</h2>
             <p className="note" style={{ margin: "4px 0 14px" }}>
-              Solid bars are capacity Goldman says was built. Dashed bars are what is scheduled. The jump in 2027 is the year the shortfall either closes or shows up.
+              Solid bars are capacity Goldman says was built. Dashed bars are what is scheduled. The jump in 2027 is the year this gap either closes or shows up.
             </p>
             <AdditionsChart />
           </div>
           <div className="card card-pad">
-            <h2 style={{ fontSize: 18 }}>Where this group fits</h2>
-            <p className="note" style={{ margin: "4px 0 16px" }}>Signed critical IT {showIren ? "in the book" : "for the landlords"}, scaled up to utility power at your conversion of {scenario.conversion.toFixed(2)} IT MW per gross MW.</p>
-            <div className="stats" style={{ gridTemplateColumns: "1fr 1fr" }}>
-              <div className="stat"><span className="eyebrow">Signed critical IT</span><strong>{mw(signedIt)}</strong><small>≈ {mw(signedUtility)} of utility power</small></div>
-              <div className="stat"><span className="eyebrow">Share of Goldman growth</span><strong>{Math.round((signedUtility / 1000 / goldmanGrowth) * 100)}%</strong><small>{goldmanGrowth} GW added 2025–27</small></div>
-              <div className="stat"><span className="eyebrow">Share of S&amp;P growth</span><strong>{Math.round((signedUtility / 1000 / spGrowth) * 100)}%</strong><small>{Math.round(spGrowth)} GW added 2025–30</small></div>
-              <div className="stat"><span className="eyebrow">Tokens, latest week</span><strong>{openRouterRankings.trillion}T</strong><small>OpenRouter rankings, week of {openRouterRankings.weekOf}</small></div>
+            <h2 style={{ fontSize: 18 }}>The near clock, in Goldman&apos;s own numbers</h2>
+            <div className="stats" style={{ gridTemplateColumns: "1fr 1fr", marginTop: 14 }}>
+              <div className="stat"><span className="eyebrow">Scheduled, 2026–27</span><strong>{gap.scheduled} GW</strong><small>{goldman.scheduledAdditionsGw.map((r) => `${r.gw} in ${r.year}`).join(", ")}</small></div>
+              <div className="stat"><span className="eyebrow">Built, 2024–25</span><strong>{gap.built} GW</strong><small>{goldman.realizedAdditionsGw.map((r) => `${r.gw} in ${r.year}`).join(", ")}</small></div>
+              <div className="stat"><span className="eyebrow">Schedule minus those two years</span><strong>{gap.gap.toFixed(1)} GW</strong><small>Arithmetic on Goldman. Not a second forecast.</small></div>
+              <div className="stat"><span className="eyebrow">Demand growth, 2025–27</span><strong>{gap.demandGrowth} GW</strong><small>{goldman.demandGw[0].gw} GW to {goldman.demandGw[goldman.demandGw.length - 1].gw} GW. This series stops in 2027.</small></div>
             </div>
             <p className="note" style={{ marginTop: 14 }}>
-              OpenRouter weekly tokens went from {first.trillion}T in the week of {first.weekOf} to {last.trillion}T in the week of {last.weekOf}. {openRouter.note}
+              A build pace that stays at {gap.built} GW leaves the {gap.demandGrowth} GW of new demand uncovered. Goldman&apos;s own path to about {goldman.capacityEnd2027Gw} GW of capacity by the end of 2027 assumes {goldman.utilization * 100}% utilization.
             </p>
           </div>
         </div>
@@ -269,8 +406,87 @@ export function DemandView() {
       <section className="section">
         <div className="section-head">
           <div>
-            <h2>Who is signing</h2>
-            <p>Signed critical IT in this book, by the tenant the company named. This is not Microsoft&apos;s or Amazon&apos;s whole global build. It is the slice they, and the neoclouds, have contracted with these landlords. A large block is an investment-grade tenant the filing does not name.</p>
+            <h2>What this book can sell</h2>
+            <p>
+              Signed critical IT {showIren ? "in the book" : "for the landlords"} is {mw(signedIt)}, about {Math.round((signedUtility / 1000 / goldmanGrowth) * 100)}% of Goldman&apos;s 2025–27 demand growth and {Math.round((signedUtility / 1000 / spGrowth) * 100)}% of S&amp;P&apos;s 2025–30 growth, after scaling to utility power at your conversion of {scenario.conversion.toFixed(2)}.
+              The bars are the unsold landlord book, in the same critical-IT terms. IREN sells compute, so it stays out of the piles.
+            </p>
+          </div>
+        </div>
+        <div className="card card-pad">
+          <div className="bars">
+            {PILES.map((p) => {
+              const total = pileTotal(unsold, p.id);
+              return (
+                <div className="bar-row tenant-row" key={p.id}>
+                  <span>
+                    <b style={{ fontWeight: 600 }}>{p.label}</b>
+                    <small style={{ display: "block", color: "var(--muted)", fontSize: 12 }}>{p.hint}</small>
+                  </span>
+                  <div className="track"><div className="fill" style={{ width: `${(total / pileMax) * 100}%`, background: p.color }} /></div>
+                  <b>{mw(total)}</b>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <div className="pile-grid">
+          {PILES.map((p) => <PileList key={p.id} items={unsold} pile={p.id} href={href} />)}
+        </div>
+
+        <div className="card" style={{ marginTop: 14 }}>
+          <UsMap states={states} pins={openPins} width={mapSize[0]} height={mapSize[1]} tickers={[...new Set(openPins.map((p) => p.ticker))]} />
+        </div>
+        {offMapNames.length ? (
+          <p className="note" style={{ marginTop: 10 }}>
+            Off this map, because the company did not name a town: {offMapNames.map((i) => `${i.label} (${i.place})`).join(" · ")}.
+          </p>
+        ) : null}
+      </section>
+
+      <section className="section">
+        <div className="section-head">
+          <div>
+            <h2>Why the forecasts keep rising</h2>
+            <p>Usage sits behind the power story. OpenAI published compute and revenue for the same three years, so those two can share a chart. The other reads use different units, so they sit underneath.</p>
+          </div>
+        </div>
+        <div className="card card-pad">
+          <h2 style={{ fontSize: 18 }}>OpenAI, indexed to 2023</h2>
+          <p className="note" style={{ margin: "4px 0 8px" }}>{openaiScale.note} Both lines are a multiple of the 2023 figure. Compute ends near 9.5×. Revenue ends at 10×.</p>
+          <ScaleChart />
+          <div className="legend" style={{ marginTop: 8 }}>
+            <span><i className="swatch line" style={{ background: "var(--s1)" }} />Compute, 0.2 GW to 1.9 GW</span>
+            <span><i className="swatch line" style={{ background: "var(--s2)" }} />Annualized revenue, $2B to $20B+</span>
+          </div>
+          <div className="fact-row">
+            <div>
+              <div className="eyebrow">Weekly tokens</div>
+              <b style={{ fontSize: 22 }}>{tokenMultiple}×</b>
+              <p className="note">OpenRouter, {first.trillion}T in the week of {isoToLabel(first.weekOf)} to {last.trillion}T in the week of {isoToLabel(last.weekOf)}, {months} months. Rankings for the week of {isoToLabel(openRouterRankings.weekOf)} read {openRouterRankings.trillion}T.</p>
+            </div>
+            <div>
+              <div className="eyebrow">NVIDIA data center</div>
+              <b style={{ fontSize: 22 }}>+{Math.round(nvidiaDc.yoy * 100)}%</b>
+              <p className="note">${nvidiaDc.revenueBn}B in the quarter ended {isoToLabel(nvidiaDc.quarterEnded)}. Global chip sales, not US power.</p>
+            </div>
+            <div>
+              <div className="eyebrow">Azure</div>
+              <b style={{ fontSize: 22 }}>+{Math.round(azureGrowth.yoy * 100)}%</b>
+              <p className="note">Quarter ended {isoToLabel(azureGrowth.quarterEnded)}. A growth rate for the cloud, not a megawatt figure.</p>
+            </div>
+          </div>
+          <p className="note" style={{ marginTop: 14 }}>
+            BCG puts Amazon, Meta, Microsoft and Google at {Math.round(bcgShare.from * 100)}% of global data-center power, rising toward {Math.round(bcgShare.to * 100)}% by {bcgShare.year}. That is a class share. It is not a split by company, and it does not give OpenAI or Anthropic a gigawatt line.
+          </p>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="section-head">
+          <div>
+            <h2>Where the signed megawatts went</h2>
+            <p>Signed critical IT in this book, by the tenant the company named. This is the slice contracted with these landlords. It is not Microsoft&apos;s or Amazon&apos;s whole global build. A large block is an investment-grade tenant the filing does not name.</p>
           </div>
         </div>
         <div className="card card-pad">
@@ -297,8 +513,16 @@ export function DemandView() {
           <a href={lbnl2030.url} target="_blank" rel="noreferrer"><span>{lbnl2030.title}. 2030 reference {lbnl2030.referenceTwh} TWh, range {lbnl2030.lowTwh}–{lbnl2030.highTwh} TWh.</span><span className="muted">TWh</span></a>
           <a href={goldman.url} target="_blank" rel="noreferrer"><span>{goldman.title}. Capacity near {goldman.capacityEnd2027Gw} GW by the end of 2027 at {goldman.utilization * 100}% utilization.</span><span className="muted">GW</span></a>
           <a href={sp.url} target="_blank" rel="noreferrer"><span>{sp.title}. {sp.note}</span><span className="muted">GW</span></a>
+          <a href={pjmLoad.url} target="_blank" rel="noreferrer"><span>{pjmLoad.title}. {pjmLoad.note}</span><span className="muted">Grid</span></a>
+          <a href={dominionPlan.url} target="_blank" rel="noreferrer"><span>{dominionPlan.title}. {dominionPlan.note}</span><span className="muted">Grid</span></a>
+          <a href={dominionQueue.url} target="_blank" rel="noreferrer"><span>{dominionQueue.title}. {dominionQueue.note}</span><span className="muted">Grid</span></a>
+          <a href={ercotQueue.url} target="_blank" rel="noreferrer"><span>{ercotQueue.title}. {ercotQueue.note}</span><span className="muted">Grid</span></a>
+          <a href={openaiScale.url} target="_blank" rel="noreferrer"><span>{openaiScale.title}. {openaiScale.note}</span><span className="muted">Usage</span></a>
           <a href={openRouter.url} target="_blank" rel="noreferrer"><span>{openRouter.title}. {openRouter.note}</span><span className="muted">Tokens</span></a>
           <a href={openRouterRankings.url} target="_blank" rel="noreferrer"><span>{openRouterRankings.title}. {openRouterRankings.note}</span><span className="muted">Tokens</span></a>
+          <a href={nvidiaDc.url} target="_blank" rel="noreferrer"><span>{nvidiaDc.title}. {nvidiaDc.note}</span><span className="muted">Chips</span></a>
+          <a href={azureGrowth.url} target="_blank" rel="noreferrer"><span>{azureGrowth.title}. {azureGrowth.note}</span><span className="muted">Cloud</span></a>
+          <a href={bcgShare.url} target="_blank" rel="noreferrer"><span>{bcgShare.title}. {bcgShare.note}</span><span className="muted">Share</span></a>
         </div>
       </section>
     </main>

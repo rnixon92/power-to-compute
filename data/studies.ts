@@ -101,3 +101,81 @@ export const openRouterRankings = {
   trillion: 164,
   note: "The public rankings series: top models plus everything else, from public endpoints. Runs a little above the newsletter figure.",
 };
+
+/** OpenAI's own comparison. Later press figures use a different revenue definition, so they stay off this series. */
+export const openaiScale = {
+  title: "OpenAI, A business that scales with the value of intelligence",
+  url: "https://openai.com/index/a-business-that-scales-with-the-value-of-intelligence/",
+  note: "Compute and annualized revenue, as OpenAI published them. Revenue in 2025 is $20B+.",
+  points: [
+    { year: 2023, computeGw: 0.2, arrBn: 2 },
+    { year: 2024, computeGw: 0.6, arrBn: 6 },
+    { year: 2025, computeGw: 1.9, arrBn: 20 },
+  ],
+};
+
+export const nvidiaDc = {
+  title: "NVIDIA, second quarter fiscal 2027 results",
+  url: "https://investor.nvidia.com/news/press-release-details/2026/NVIDIA-Announces-Financial-Results-for-Second-Quarter-Fiscal-2027/default.aspx",
+  quarterEnded: "2026-07-26",
+  revenueBn: 89,
+  yoy: 1.17,
+  note: "Data-center revenue for the quarter. A global chip figure, not US data-center power.",
+};
+
+export const azureGrowth = {
+  title: "Microsoft, fiscal fourth quarter 2026",
+  url: "https://news.microsoft.com/source/2026/07/29/microsoft-cloud-and-ai-strength-fuels-fourth-quarter-results-4/",
+  quarterEnded: "2026-06-30",
+  yoy: 0.43,
+  note: "Azure and other cloud services. A growth rate, not a megawatt figure.",
+};
+
+export const bcgShare = {
+  title: "BCG, Breaking Barriers to Data Center Growth",
+  url: "https://www.bcg.com/publications/2025/breaking-barriers-data-center-growth",
+  from: 0.35,
+  to: 0.45,
+  year: 2028,
+  note: "Amazon, Meta, Microsoft and Google. Share of global data-center power, from 35% toward 45% by 2028. About 60% of the growth from 2023 to 2028.",
+};
+
+export const pjmLoad = {
+  title: "PJM Board, Large Load Additions problem statement",
+  url: "https://www.pjm.com/-/media/DotCom/committees-groups/cifp-lla/2025/20251014/20251014-informational-only---critical-issue-fast-path---large-load-additions---problem-statement---updated---clean.pdf",
+  asOf: "2025-10-14",
+  peakGrowthGw: 32,
+  dataCenterGw: 30,
+  from: 2024,
+  to: 2030,
+  note: "About 30 GW of 32 GW of peak-load growth is data centers. The board says 2030 may still have unmet demand after the queue, no further retirements, and more demand response. It does not publish one shortfall in gigawatts.",
+};
+
+export const dominionPlan = {
+  title: "Dominion Energy load forecast, PJM Load Analysis Subcommittee",
+  url: "https://www.pjm.com/-/media/DotCom/committees-groups/subcommittees/las/2026/20260929/20260929-item-5ai---dominion_energy.pdf",
+  asOf: "2026-09-29",
+  capacity2030Gw: 17.6,
+  demand2030Gw: 7.8,
+  note: "Contract capacity in the DOM zone by 2030. Coincident demand is 7.8 GW, because a new contract takes about five years to reach roughly 63% use.",
+};
+
+export const dominionQueue = {
+  title: "Dominion large-load queue, as reported by Data Center Dynamics",
+  url: "https://www.datacenterdynamics.com/en/news/dominion-files-large-load-connection-queue-plan-with-state-regulators/",
+  asOf: "2026-02-16",
+  requestsGw: 70,
+  datedThrough2031Gw: 25,
+  peakGw: 24.7,
+  note: "Requests, not a forecast. About 25 GW has a connection date through 2031. The system peak on record was 24.7 GW.",
+};
+
+export const ercotQueue = {
+  title: "ERCOT large-load requests, as reported by the Belfer Center",
+  url: "https://www.belfercenter.org/research-analysis/data-centers-texas-virginia-comparison",
+  asOf: "2025-12",
+  requestsGw: 226,
+  requestsPriorGw: 63,
+  newDemand2030Gw: 51,
+  note: "ERCOT was monitoring about 226 GW of large-load requests in December 2025, up from 63 GW a year earlier. About three-quarters are data centers. Planners put about 51 GW of new demand in the 2030 forecast. Much of the queue is duplicate or speculative.",
+};
