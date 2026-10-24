@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { book, watchlist } from "@/data/ledger";
 import type { Company, MarketBook, Tier } from "@/data/types";
-import { backlog, blocks, liveMw, marketMultiple, series, signedMw, sumTiers, tierMw, TODAY, valuation, type Point, type Valuation } from "@/lib/forecast";
+import { backlog, blocks, ctxFor, liveMw, marketMultiple, series, signedMw, sumTiers, tierMw, TODAY, valuation, type Point, type Valuation } from "@/lib/forecast";
 import { TIERS, tierLabel } from "@/lib/scenario";
 import { companyVar, hasSlot, tierVar } from "@/lib/palette";
 import { mw, mwTick, px, usdCompact, usdTick } from "@/lib/format";
@@ -40,14 +40,15 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
   const rows: Row[] = useMemo(
     () =>
       book.map((company) => {
-        const quote = quoteFor(market, company.ticker);
+        const ctx = ctxFor(market, company.ticker);
+        const quote = ctx.quote;
         const list = blocks(company, scenario);
-        const value = valuation(list, scenario, quote, company.model);
+        const value = valuation(company, list, scenario, ctx);
         return {
           company,
           points: series(list, scenario),
           value,
-          multiple: marketMultiple(value, scenario, quote, company.model),
+          multiple: marketMultiple(company, value, scenario, ctx),
           signed: signedMw(company, scenario),
           live: liveMw(company, scenario),
           tiers: tierMw(company, scenario),
@@ -266,7 +267,7 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
                       <td className="r">{r.cap && r.signed ? usdCompact(r.cap / r.signed) : "—"}</td>
                       <td className="r">{usdCompact(sumTiers(r.value.target.revenue))}</td>
                       <td className="r"><b>{r.value.price != null && r.value.price > 0 ? px(r.value.price) : "—"}</b></td>
-                      <td className="r">{r.value.price != null && r.value.price > 0 ? <Delta value={(r.value.upside ?? 0) * 100} digits={0} /> : <span className="muted">no lease</span>}</td>
+                      <td className="r">{r.value.price != null && r.value.price > 0 ? <Delta value={(r.value.upside ?? 0) * 100} digits={0} /> : <span className="muted" title="Debt, claims and build cost still to spend exceed the value in this scenario">below zero</span>}</td>
                       <td className="r">{formatMarket(r.multiple, scenario.basis, r.company.model)}</td>
                     </tr>
                   );

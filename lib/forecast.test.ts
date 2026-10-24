@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { book, companies, companyByTicker } from "@/data/ledger";
-import { blocks, disclosedLeaseRate, marketMultiple, pointAt, priceByYear, signedMw, sumTiers, upside, valuation, yearTable } from "@/lib/forecast";
+import { aiValueAt, blocks, disclosedLeaseRate, marketMultiple, pointAt, priceByYear, signedMw, spentShare, sumTiers, upside, valuation, yearTable, type Ctx } from "@/lib/forecast";
 import { decodeScenario, defaultScenario, encodeScenario, presets, type Scenario } from "@/lib/scenario";
 
 const s = defaultScenario;
+const ctx: Ctx = { quote: { shares: 400e6, price: 11 } as never, btc: 60_000 };
 const at = (ticker: string, iso: string, sc: Scenario = s) => pointAt(blocks(companyByTicker(ticker)!, sc), sc, Date.parse(iso));
 
 describe("ledger", () => {
@@ -82,34 +83,83 @@ describe("forecast", () => {
     expect(yearEnd).toBeLessThan(3e9);
   });
 
-  it("subtracts debt on the EBITDA basis and interest on the earnings basis", () => {
-    const hut = blocks(companyByTicker("HUT")!, s);
-    const pe = valuation(hut, s, undefined, "colo-lease");
-    const ev = valuation(hut, { ...s, basis: "ebitda" }, undefined, "colo-lease");
-    expect(pe.equity).toBeCloseTo(pe.target.earnings * 20, 0);
-    expect(ev.equity).toBeCloseTo(ev.target.noi * 20 - ev.target.debt, 0);
-  });
-
-  it("capitalizes landlord NOI at the cap rate and leaves IREN on earnings", () => {
+  it("values the AI business on earnings, EBITDA or a cap rate, and keeps IREN on earnings", () => {
+    const hut = companyByTicker("HUT")!;
+    const pe = valuation(hut, blocks(hut, s), s, ctx);
+    expect(pe.ai.ev).toBeCloseTo(pe.ai.earnings * s.multiple + pe.target.debt, 0);
+    const eb = { ...s, basis: "ebitda" as const };
+    const ev = valuation(hut, blocks(hut, eb), eb, ctx);
+    expect(ev.ai.ev).toBeCloseTo(ev.ai.noi * s.multiple, 0);
     const cap = { ...s, basis: "cap" as const, capRate: 0.075 };
-    const hut = valuation(blocks(companyByTicker("HUT")!, cap), cap, undefined, "colo-lease");
-    expect(hut.equity).toBeCloseTo(hut.target.noi / 0.075 - hut.target.debt, 0);
-    const iren = valuation(blocks(companyByTicker("IREN")!, cap), cap, undefined, "gpu-cloud");
-    expect(iren.equity).toBeCloseTo(iren.target.earnings * s.multiple, 0);
+    const c = valuation(hut, blocks(hut, cap), cap, ctx);
+    expect(c.ai.ev).toBeCloseTo(c.ai.noi / 0.075, 0);
+    const iren = companyByTicker("IREN")!;
+    const i = valuation(iren, blocks(iren, cap), cap, ctx);
+    expect(i.ai.ev).toBeCloseTo(i.ai.earnings * cap.multiple + i.target.debt, 0);
   });
 
-  it("discounts the target-year price back to today", () => {
-    const quote = { shares: 100e6, price: 10 } as never;
-    const v = valuation(blocks(companyByTicker("GLXY")!, s), s, quote, "colo-lease");
-    expect(v.price!).toBeLessThan(v.futurePrice!);
-    expect(v.price! * Math.pow(1 + s.discount, v.years)).toBeCloseTo(v.futurePrice!, 6);
+  it("charges each company's overhead to the AI business", () => {
+    const hut = companyByTicker("HUT")!;
+    const p = pointAt(blocks(hut, s), s, Date.parse("2030-12-31"));
+    const ai = aiValueAt(hut, p, s);
+    expect(ai.overheadAi + ai.overheadOther).toBeCloseTo(hut.balance!.overhead, 0);
+    expect(ai.noi).toBeCloseTo(p.noi - ai.overheadAi, 0);
+    const noStock = aiValueAt(hut, p, { ...s, stockPay: false });
+    expect(noStock.overheadAi + noStock.overheadOther).toBeCloseTo(hut.balance!.overhead - hut.balance!.stockPay, 0);
+  });
+
+  it("adds the balance sheet to the AI value today", () => {
+    const hut = companyByTicker("HUT")!;
+    const v = valuation(hut, blocks(hut, s), s, ctx);
+    expect(v.equity).toBeCloseTo(v.aiToday + v.ai.otherValue + v.bridge.net, 0);
+    const b = hut.balance!;
+    const expected = b.cash + (b.bitcoin ?? 0) * ctx.btc - b.debt - (b.claims ?? []).reduce((a, c) => a + c.value, 0) - v.bridge.remaining;
+    expect(v.bridge.net).toBeCloseTo(expected, 0);
+    expect(v.price!).toBeCloseTo(v.equity / v.shares!, 6);
+  });
+
+  it("leaves the leverage assumption out of the EBITDA and cap-rate prices", () => {
+    for (const basis of ["ebitda", "cap"] as const) {
+      const low = { ...s, basis, leverage: 0.2 };
+      const high = { ...s, basis, leverage: 0.8 };
+      const wulf = companyByTicker("WULF")!;
+      expect(valuation(wulf, blocks(wulf, low), low, ctx).price!).toBeCloseTo(valuation(wulf, blocks(wulf, high), high, ctx).price!, 6);
+    }
+  });
+
+  it("counts Galaxy at book value with Helios taken out at cost", () => {
+    const glxy = companyByTicker("GLXY")!;
+    const v = valuation(glxy, blocks(glxy, s), s, ctx);
+    const labels = v.bridge.lines.map((l) => l.label);
+    expect(labels).toContain("Book equity");
+    expect(labels).toContain("AI build cost already in book");
+    expect(labels).not.toContain("Cash");
+  });
+
+  it("gives MARA's whole overhead to mining when no AI site is on, and floors mining at zero", () => {
+    const mara = companyByTicker("MARA")!;
+    const v = valuation(mara, blocks(mara, s), s, ctx);
+    expect(v.ai.overheadAi).toBe(0);
+    expect(v.ai.otherValue).toBe(0);
+    const b = mara.balance!;
+    const net = b.cash + b.bitcoin! * ctx.btc + b.otherAssets![0].value - b.debt;
+    expect(v.equity).toBeCloseTo(net, 0);
+  });
+
+  it("treats a live site as fully paid for and a far-off site as not started", () => {
+    const wulf = blocks(companyByTicker("WULF")!, s);
+    const now = Date.parse("2026-10-24");
+    expect(spentShare(wulf.find((b) => b.ramp.id === "wulf-lm-live")!, now)).toBe(1);
+    expect(spentShare(wulf.find((b) => b.ramp.id === "wulf-hawkeye")!, now)).toBe(0);
   });
 
   it("builds a five-year table", () => {
-    const rows = yearTable(blocks(companyByTicker("HUT")!, s), s, 100e6, "colo-lease");
+    const hut = companyByTicker("HUT")!;
+    const rows = yearTable(hut, blocks(hut, s), s, ctx);
     expect(rows.map((r) => r.year)).toEqual([2026, 2027, 2028, 2029, 2030]);
     expect(rows[0].revenue).toBe(0);
     expect(rows[4].noi).toBeCloseTo(454e6 + 655e6 * 2, 0);
+    expect(rows[4].overhead).toBeGreaterThan(0);
   });
 });
 
@@ -125,26 +175,26 @@ describe("scenario URL", () => {
 });
 
 describe("explaining the price", () => {
-  const quote = { shares: 400e6, price: 11 } as never;
-
-  it("keeps IREN on earnings in the upside total when landlords use a cap rate", () => {
-    const cap = { ...s, basis: "cap" as const };
-    const iren = companyByTicker("IREN")!;
-    const pe = valuation(blocks(iren, cap), cap, quote, iren.model);
-    expect(pe.equity).toBeCloseTo(pe.target.earnings * cap.multiple, 0);
-  });
-
   it("solves the multiple that lands on today's price", () => {
     const wulf = companyByTicker("WULF")!;
-    const v = valuation(blocks(wulf, s), s, quote, wulf.model);
-    const m = marketMultiple(v, s, quote, wulf.model)!;
-    const at = valuation(blocks(wulf, { ...s, multiple: m }), { ...s, multiple: m }, quote, wulf.model);
-    expect(at.price!).toBeCloseTo(11, 6);
+    const v = valuation(wulf, blocks(wulf, s), s, ctx);
+    const m = marketMultiple(wulf, v, s, ctx)!;
+    const at = { ...s, multiple: m };
+    expect(valuation(wulf, blocks(wulf, at), at, ctx).price!).toBeCloseTo(11, 6);
+  });
+
+  it("solves the cap rate that lands on today's price", () => {
+    const hut = companyByTicker("HUT")!;
+    const cap = { ...s, basis: "cap" as const };
+    const v = valuation(hut, blocks(hut, cap), cap, ctx);
+    const c = marketMultiple(hut, v, cap, ctx)!;
+    const at = { ...cap, capRate: c };
+    expect(valuation(hut, blocks(hut, at), at, ctx).price!).toBeCloseTo(11, 6);
   });
 
   it("prices Muskie as upside that grows once it is built", () => {
     const early = { ...s, year: 2028 };
-    const rows = upside(companyByTicker("WULF")!, early, quote);
+    const rows = upside(companyByTicker("WULF")!, early, ctx);
     const m1 = rows.find((r) => r.block.ramp.id === "wulf-muskie-1")!;
     expect(m1.builtYear).toBe(2029);
     expect(m1.addBuilt!).toBeGreaterThan(m1.addNow!);
@@ -152,8 +202,9 @@ describe("explaining the price", () => {
   });
 
   it("gives one price per valuation year", () => {
-    const rows = priceByYear(companyByTicker("HUT")!, s, quote);
+    const hut = companyByTicker("HUT")!;
+    const rows = priceByYear(hut, s, ctx);
     expect(rows.map((r) => r.year)).toEqual([2026, 2027, 2028, 2029, 2030]);
-    expect(rows.find((r) => r.year === s.year)!.price).toBeCloseTo(valuation(blocks(companyByTicker("HUT")!, s), s, quote, "colo-lease").price!, 6);
+    expect(rows.find((r) => r.year === s.year)!.price).toBeCloseTo(valuation(hut, blocks(hut, s), s, ctx).price!, 6);
   });
 });

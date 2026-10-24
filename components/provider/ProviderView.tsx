@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { Company, MarketBook } from "@/data/types";
-import { backlog, blocks as toBlocks, liveMw, marketMultiple, pricePath, series, signedMw, sumTiers, TODAY, valuation, yearTable } from "@/lib/forecast";
+import { backlog, blocks as toBlocks, ctxFor, liveMw, marketMultiple, pricePath, series, signedMw, sumTiers, TODAY, valuation, yearTable } from "@/lib/forecast";
 import { companyVar } from "@/lib/palette";
 import { isoToLabel, mw, px, usdCompact } from "@/lib/format";
 import { quoteFor } from "@/lib/quotes";
@@ -13,7 +13,7 @@ import { ForecastChart } from "@/components/charts/ForecastChart";
 import { UsMap, type Pin } from "@/components/charts/UsMap";
 import { PriceBridge, Summary } from "@/components/provider/Summary";
 import { Sites } from "@/components/provider/Sites";
-import { Contracts, Financing, Sources, YearTable } from "@/components/provider/Sections";
+import { BalanceSheet, Contracts, Financing, Sources, YearTable } from "@/components/provider/Sections";
 
 const modelLabel = { "gpu-cloud": "GPU cloud", "colo-lease": "Data-center landlord", "power-owner": "Power portfolio" } as const;
 
@@ -37,10 +37,11 @@ export function ProviderView({ company, market, states, pins, mapSize }: { compa
 
   const list = useMemo(() => toBlocks(company, scenario), [company, scenario]);
   const points = useMemo(() => series(list, scenario), [list, scenario]);
-  const value = useMemo(() => valuation(list, scenario, quote, company.model), [list, scenario, quote, company.model]);
-  const path = useMemo(() => pricePath(points, scenario, quote?.shares ?? null, company.model), [points, scenario, quote, company.model]);
-  const rows = useMemo(() => yearTable(list, scenario, quote?.shares ?? null, company.model), [list, scenario, quote, company.model]);
-  const multiple = marketMultiple(value, scenario, quote, company.model);
+  const ctx = useMemo(() => ctxFor(market, company.ticker), [market, company.ticker]);
+  const value = useMemo(() => valuation(company, list, scenario, ctx), [company, list, scenario, ctx]);
+  const path = useMemo(() => pricePath(company, list, points, scenario, ctx), [company, list, points, scenario, ctx]);
+  const rows = useMemo(() => yearTable(company, list, scenario, ctx), [company, list, scenario, ctx]);
+  const multiple = marketMultiple(company, value, scenario, ctx);
   const active = useScrollSpy(SECTION_IDS);
 
   const signed = signedMw(company, scenario);
@@ -104,7 +105,7 @@ export function ProviderView({ company, market, states, pins, mapSize }: { compa
       <div className="wrap p-body">
         <div className="p-main">
           <section id="forecast">
-            <Summary company={company} quote={quote} value={value} multiple={multiple} />
+            <Summary company={company} ctx={ctx} value={value} multiple={multiple} />
             <PriceBridge company={company} value={value} />
             <div className="card fc" style={{ marginTop: 14 }}>
               <div className="fc-head">
@@ -149,6 +150,7 @@ export function ProviderView({ company, market, states, pins, mapSize }: { compa
           <section id="financing">
             <div className="section-head"><div><h2>Build and financing</h2><p>What the company says it costs to build, and the debt raised against it.</p></div></div>
             <Financing company={company} blocks={list} />
+            <BalanceSheet company={company} value={value} />
           </section>
 
           <section id="model">

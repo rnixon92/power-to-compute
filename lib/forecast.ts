@@ -1,4 +1,5 @@
-import type { Company, ModelKind, Quote, Ramp, Tier } from "@/data/types";
+import { BTC_JUN30 } from "@/data/ledger";
+import type { Company, MarketBook, Quote, Ramp, Tier } from "@/data/types";
 import { appliedBasis, TIERS, type Scenario } from "@/lib/scenario";
 
 export const TODAY = new Date().toISOString().slice(0, 10);
@@ -163,49 +164,153 @@ export function series(list: Block[], s: Scenario, from = "2026-01-01"): Point[]
   return out;
 }
 
-export function equityValue(p: Point, s: Scenario, model: ModelKind): number {
-  const basis = appliedBasis(model, s);
-  if (basis === "cap") return p.noi / s.capRate - p.debt;
-  if (basis === "ebitda") return p.noi * s.multiple - p.debt;
-  return p.earnings * s.multiple;
-}
-
 export function sharesAt(shares: number, t: number, s: Scenario): number {
   const years = Math.max(0, (t - Date.parse(TODAY)) / YEAR);
   return shares * Math.pow(1 + s.dilution, years);
 }
 
+/** What a valuation needs from the market: the company's quote and the bitcoin price. */
+export interface Ctx {
+  quote?: Quote;
+  btc: number;
+}
+
+export function ctxFor(market: MarketBook, ticker: string): Ctx {
+  return { quote: market.quotes.find((q) => q.ticker === ticker), btc: market.btc?.price ?? BTC_JUN30 };
+}
+
+/** Build spend runs from a year before first capacity until the block is fully online. */
+const BUILD_LEAD = 12;
+
+export function spentShare(b: Block, t: number): number {
+  const d = new Date(b.start);
+  d.setUTCMonth(d.getUTCMonth() - BUILD_LEAD);
+  const from = d.getTime();
+  if (t <= from) return 0;
+  if (t >= b.full) return 1;
+  return (t - from) / (b.full - from);
+}
+
+export function overheadOf(company: Company, s: Scenario): number {
+  const b = company.balance;
+  if (!b) return 0;
+  return b.overhead - (s.stockPay ? 0 : b.stockPay);
+}
+
+export interface AiValue {
+  /** Value of the AI business at the point's date, before the balance sheet. */
+  ev: number;
+  /** NOI after the AI share of overhead. */
+  noi: number;
+  overheadAi: number;
+  overheadOther: number;
+  /** Earnings after the AI share of overhead, interest, depreciation and tax. */
+  earnings: number;
+  /** Businesses outside the AI forecast, at your multiple on gross profit after their share of overhead. */
+  otherValue: number;
+}
+
+/**
+ * Overhead is shared between the AI business and other operations by gross profit,
+ * so a mining-heavy company is not charged its whole head office against a small AI book.
+ */
+export function aiValueAt(company: Company, p: Point, s: Scenario): AiValue {
+  const overhead = overheadOf(company, s);
+  const gp = Math.max(0, company.balance?.other?.grossProfit ?? 0);
+  const aiShare = p.noi > 0 ? p.noi / (p.noi + gp) : gp > 0 ? 0 : 1;
+  const overheadAi = overhead * aiShare;
+  const overheadOther = overhead - overheadAi;
+  const noi = p.noi - overheadAi;
+  const pretax = noi - p.da - p.interest;
+  const earnings = pretax > 0 ? pretax * (1 - s.tax) : pretax;
+  const basis = appliedBasis(company.model, s);
+  const ev = basis === "cap" ? noi / s.capRate : basis === "ebitda" ? noi * s.multiple : earnings * s.multiple + p.debt;
+  const otherValue = s.otherMultiple * Math.max(0, (company.balance?.other?.grossProfit ?? 0) - overheadOther);
+  return { ev, noi, overheadAi, overheadOther, earnings, otherValue };
+}
+
+export interface BridgeLine {
+  label: string;
+  value: number;
+  note?: string;
+}
+
+export interface Bridge {
+  lines: BridgeLine[];
+  /** Sum of the lines: what sits between the AI business and the equity, today. */
+  net: number;
+  remaining: number;
+}
+
+/**
+ * From the AI business to the equity, using today's balance sheet.
+ * Build cost already spent sits in the cash and debt figures, so only the part still to spend comes off.
+ */
+export function bridge(company: Company, list: Block[], ctx: Ctx): Bridge {
+  const now = Date.parse(TODAY);
+  const on = list.filter((b) => b.enabled);
+  const remaining = on.reduce((a, b) => a + b.capex * (1 - spentShare(b, now)), 0);
+  const lines: BridgeLine[] = [];
+  const bal = company.balance;
+  if (bal?.bookEquity != null) {
+    const spent = on.reduce((a, b) => a + b.capex * spentShare(b, now), 0);
+    lines.push({ label: "Book equity", value: bal.bookEquity, note: bal.bookNote });
+    lines.push({ label: "AI build cost already in book", value: -spent, note: "Taken out so the data centers are not counted twice." });
+  } else if (bal) {
+    lines.push({ label: "Cash", value: bal.cash, note: "Including restricted cash." });
+    if (bal.bitcoin) lines.push({ label: `Bitcoin, ${bal.bitcoin.toLocaleString("en-US")} coins`, value: bal.bitcoin * ctx.btc, note: `At $${Math.round(ctx.btc).toLocaleString("en-US")} a coin.` });
+    for (const a of bal.otherAssets ?? []) lines.push(a);
+    lines.push({ label: "Debt", value: -bal.debt, note: bal.debtNote });
+    for (const c of bal.claims ?? []) lines.push({ ...c, value: -c.value });
+  }
+  lines.push({ label: "Build cost still to spend", value: -remaining, note: "On the sites switched on." });
+  return { lines, net: lines.reduce((a, l) => a + l.value, 0), remaining };
+}
+
 export interface Valuation {
   target: Point;
   targetDate: string;
+  years: number;
+  ai: AiValue;
+  /** AI business value discounted to today. */
+  aiToday: number;
+  bridge: Bridge;
+  /** Equity value today. */
   equity: number;
   shares: number | null;
+  /** Value per share at the target date, before discounting the AI business. */
   futurePrice: number | null;
-  /** Future price discounted back to today. */
   price: number | null;
   upside: number | null;
-  years: number;
 }
 
-export function valuation(list: Block[], s: Scenario, quote: Quote | undefined, model: ModelKind): Valuation {
+export function valuation(company: Company, list: Block[], s: Scenario, ctx: Ctx): Valuation {
   const targetDate = `${s.year}-12-31`;
   const target = pointAt(list, s, Date.parse(targetDate));
-  const equity = equityValue(target, s, model);
+  const ai = aiValueAt(company, target, s);
   const years = Math.max(0, (Date.parse(targetDate) - Date.parse(TODAY)) / YEAR);
-  const shares = quote?.shares ? sharesAt(quote.shares, Date.parse(targetDate), s) : null;
-  const futurePrice = shares ? equity / shares : null;
-  const price = futurePrice != null ? futurePrice / Math.pow(1 + s.discount, years) : null;
-  const upside = price != null && quote?.price ? price / quote.price - 1 : null;
-  return { target, targetDate, equity, shares, futurePrice, price, upside, years };
+  const aiToday = ai.ev / Math.pow(1 + s.discount, years);
+  const br = bridge(company, list, ctx);
+  const equity = aiToday + ai.otherValue + br.net;
+  const shares = ctx.quote?.shares ? sharesAt(ctx.quote.shares, Date.parse(targetDate), s) : null;
+  const futurePrice = shares ? (ai.ev + ai.otherValue + br.net) / shares : null;
+  const price = shares ? equity / shares : null;
+  const upside = price != null && ctx.quote?.price ? price / ctx.quote.price - 1 : null;
+  return { target, targetDate, years, ai, aiToday, bridge: br, equity, shares, futurePrice, price, upside };
 }
 
 /** Implied value per share at each future month, before discounting. */
-export function pricePath(points: Point[], s: Scenario, shares: number | null, model: ModelKind): { t: number; v: number }[] {
+export function pricePath(company: Company, list: Block[], points: Point[], s: Scenario, ctx: Ctx): { t: number; v: number }[] {
+  const shares = ctx.quote?.shares;
   if (!shares) return [];
   const now = Date.parse(TODAY);
+  const net = bridge(company, list, ctx).net;
   return points
     .filter((p) => p.t >= now)
-    .map((p) => ({ t: p.t, v: equityValue(p, s, model) / sharesAt(shares, p.t, s) }));
+    .map((p) => {
+      const ai = aiValueAt(company, p, s);
+      return { t: p.t, v: (ai.ev + ai.otherValue + net) / sharesAt(shares, p.t, s) };
+    });
 }
 
 export interface YearRow {
@@ -213,6 +318,7 @@ export interface YearRow {
   mwEnd: number;
   revenue: number;
   noi: number;
+  overhead: number;
   da: number;
   interest: number;
   earnings: number;
@@ -223,36 +329,43 @@ export interface YearRow {
 }
 
 /** Calendar-year totals, from the average of twelve monthly run-rates. */
-export function yearTable(list: Block[], s: Scenario, shares: number | null, model: ModelKind): YearRow[] {
+export function yearTable(company: Company, list: Block[], s: Scenario, ctx: Ctx): YearRow[] {
+  const shares = ctx.quote?.shares ?? null;
+  const net = bridge(company, list, ctx).net;
   const rows: YearRow[] = [];
   for (let year = 2026; year <= 2030; year++) {
     let revenue = 0;
     let noi = 0;
+    let overhead = 0;
     let da = 0;
     let interest = 0;
     let earnings = 0;
     for (let m = 0; m < 12; m++) {
       const p = pointAt(list, s, Date.UTC(year, m, 15));
+      const ai = aiValueAt(company, p, s);
       revenue += sumTiers(p.revenue) / 12;
       noi += p.noi / 12;
+      overhead += ai.overheadAi / 12;
       da += p.da / 12;
       interest += p.interest / 12;
-      earnings += p.earnings / 12;
+      earnings += ai.earnings / 12;
     }
     const end = pointAt(list, s, Date.UTC(year, 11, 31));
+    const endAi = aiValueAt(company, end, s);
     const sh = shares ? sharesAt(shares, end.t, s) : null;
     rows.push({
       year,
       mwEnd: sumTiers(end.mw),
       revenue,
       noi,
+      overhead,
       da,
       interest,
       earnings,
       exitRevenue: sumTiers(end.revenue),
-      exitEarnings: end.earnings,
+      exitEarnings: endAi.earnings,
       eps: sh ? earnings / sh : null,
-      value: sh ? equityValue(end, s, model) / sh : null,
+      value: sh ? (endAi.ev + endAi.otherValue + net) / sh : null,
     });
   }
   return rows;
@@ -303,16 +416,17 @@ export function leaseRateOf(b: Block): number | null {
 }
 
 /**
- * The multiple that makes your scenario land exactly on today's share price.
- * Price is linear in the multiple, so this solves directly. Null when earnings (or EBITDA) are not positive.
+ * The multiple (or cap rate) that makes your scenario land exactly on today's share price,
+ * with the balance sheet and other businesses held as they are. Price is linear in the multiple.
  */
-export function marketMultiple(v: Valuation, s: Scenario, quote: Quote | undefined, model: ModelKind): number | null {
-  if (!quote?.price || !v.shares) return null;
-  const equityToday = quote.price * v.shares * Math.pow(1 + s.discount, v.years);
-  const basis = appliedBasis(model, s);
-  if (basis === "cap") return v.target.noi > 0 ? v.target.noi / (equityToday + v.target.debt) : null;
-  if (basis === "pe") return v.target.earnings > 0 ? equityToday / v.target.earnings : null;
-  return v.target.noi > 0 ? (equityToday + v.target.debt) / v.target.noi : null;
+export function marketMultiple(company: Company, v: Valuation, s: Scenario, ctx: Ctx): number | null {
+  if (!ctx.quote?.price || !v.shares) return null;
+  const aiNeeded = (ctx.quote.price * v.shares - v.ai.otherValue - v.bridge.net) * Math.pow(1 + s.discount, v.years);
+  const basis = appliedBasis(company.model, s);
+  if (basis === "cap") return v.ai.noi > 0 && aiNeeded > 0 ? v.ai.noi / aiNeeded : null;
+  if (basis === "ebitda") return v.ai.noi > 0 && aiNeeded > 0 ? aiNeeded / v.ai.noi : null;
+  const equityNeeded = aiNeeded - v.target.debt;
+  return v.ai.earnings > 0 && equityNeeded > 0 ? equityNeeded / v.ai.earnings : null;
 }
 
 export interface Upside {
@@ -325,19 +439,19 @@ export interface Upside {
   addBuilt: number | null;
 }
 
-function priceWith(company: Company, s: Scenario, quote: Quote | undefined, year: number): number | null {
+function priceWith(company: Company, s: Scenario, ctx: Ctx, year: number): number | null {
   const sc = { ...s, year };
-  return valuation(blocks(company, sc), sc, quote, company.model).price;
+  return valuation(company, blocks(company, sc), sc, ctx).price;
 }
 
 /** What each switched-off ramp would add per share, largest first. */
-export function upside(company: Company, s: Scenario, quote?: Quote): Upside[] {
+export function upside(company: Company, s: Scenario, ctx: Ctx): Upside[] {
   const list = blocks(company, s);
   const off = list.filter((b) => !b.enabled);
   if (!off.length) return [];
   const baseAt = new Map<number, number | null>();
   const base = (year: number) => {
-    if (!baseAt.has(year)) baseAt.set(year, priceWith(company, s, quote, year));
+    if (!baseAt.has(year)) baseAt.set(year, priceWith(company, s, ctx, year));
     return baseAt.get(year) ?? null;
   };
   const diff = (a: number | null, b: number | null) => (a == null || b == null ? null : a - b);
@@ -348,18 +462,18 @@ export function upside(company: Company, s: Scenario, quote?: Quote): Upside[] {
       return {
         block: b,
         builtYear,
-        addNow: diff(priceWith(company, withIt, quote, s.year), base(s.year)),
-        addBuilt: diff(priceWith(company, withIt, quote, builtYear), base(builtYear)),
+        addNow: diff(priceWith(company, withIt, ctx, s.year), base(s.year)),
+        addBuilt: diff(priceWith(company, withIt, ctx, builtYear), base(builtYear)),
       };
     })
     .sort((a, b) => (b.addBuilt ?? 0) - (a.addBuilt ?? 0));
 }
 
 /** Implied price today for each valuation year, for the year strip. */
-export function priceByYear(company: Company, s: Scenario, quote?: Quote): { year: number; price: number | null; upside: number | null }[] {
+export function priceByYear(company: Company, s: Scenario, ctx: Ctx): { year: number; price: number | null; upside: number | null }[] {
   return [2026, 2027, 2028, 2029, 2030].map((year) => {
     const sc = { ...s, year };
-    const v = valuation(blocks(company, sc), sc, quote, company.model);
+    const v = valuation(company, blocks(company, sc), sc, ctx);
     return { year, price: v.price, upside: v.upside };
   });
 }

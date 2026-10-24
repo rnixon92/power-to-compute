@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { CapitalItem, Company } from "@/data/types";
 import type { Filing } from "@/lib/edgar";
-import { leaseRateOf, type Block, type YearRow } from "@/lib/forecast";
+import { leaseRateOf, type Block, type Valuation, type YearRow } from "@/lib/forecast";
 import { tierLabel } from "@/lib/scenario";
 import { tierVar } from "@/lib/palette";
 import { isoToLabel, mw, perMw, px, quarter, usdCompact } from "@/lib/format";
@@ -153,6 +153,7 @@ export function YearTable({ rows, gpu }: { rows: YearRow[]; gpu: boolean }) {
           {line("Critical IT at year end", (r) => mw(r.mwEnd))}
           {line("Revenue", (r) => usdCompact(r.revenue))}
           {line(gpu ? "Project EBITDA" : "NOI", (r) => usdCompact(r.noi))}
+          {line("Overhead, AI share", (r) => usdCompact(-r.overhead))}
           {line("Depreciation", (r) => usdCompact(-r.da))}
           {line("Interest", (r) => usdCompact(-r.interest))}
           {line("Earnings", (r) => usdCompact(r.earnings), true)}
@@ -197,5 +198,50 @@ export function Sources({ company }: { company: Company }) {
         ))}
       </div>
     </>
+  );
+}
+
+export function BalanceSheet({ company, value }: { company: Company; value: Valuation }) {
+  const bal = company.balance;
+  if (!bal) return null;
+  const src = company.sources.find((x) => x.id === bal.source);
+  const ai = value.ai;
+  return (
+    <div className="card card-pad" style={{ marginTop: 12 }}>
+      <h3 style={{ fontSize: 15 }}>The rest of the company</h3>
+      <p className="note" style={{ margin: "4px 0 12px" }}>
+        Balance sheet at {isoToLabel(bal.asOf)}{src ? <>, from <a className="link" href={src.url} target="_blank" rel="noreferrer">{src.title}</a></> : null}. These lines sit between the AI business and each share.
+      </p>
+      <div className="cap-list">
+        {value.bridge.lines.filter((l) => l.label !== "Build cost still to spend").map((l) => (
+          <div key={l.label}>
+            <span className="pill" style={{ justifySelf: "start" }}>{l.value < 0 ? "Less" : "Add"}</span>
+            <div>
+              <b style={{ fontWeight: 560 }}>{l.label}</b>
+              {l.note ? <p>{l.note}</p> : null}
+            </div>
+            <b className="tabular">{l.value < 0 ? "−" : ""}{usdCompact(Math.abs(l.value))}</b>
+          </div>
+        ))}
+        {bal.other ? (
+          <div>
+            <span className="pill" style={{ justifySelf: "start" }}>Add</span>
+            <div>
+              <b style={{ fontWeight: 560 }}>{bal.other.label}</b>
+              <p>{bal.other.note} {usdCompact(bal.other.grossProfit)} a year, less {usdCompact(ai.overheadOther)} of overhead, at your multiple.</p>
+            </div>
+            <b className="tabular">{usdCompact(ai.otherValue)}</b>
+          </div>
+        ) : null}
+        <div>
+          <span className="pill" style={{ justifySelf: "start" }}>Cost</span>
+          <div>
+            <b style={{ fontWeight: 560 }}>Corporate overhead</b>
+            <p>{bal.overheadNote} Charged a year: {usdCompact(ai.overheadAi)} to the AI business{ai.overheadOther ? ` and ${usdCompact(ai.overheadOther)} to the rest` : ""}, at the end of your valuation year.</p>
+          </div>
+          <b className="tabular">{usdCompact(ai.overheadAi + ai.overheadOther)}/yr</b>
+        </div>
+      </div>
+    </div>
   );
 }

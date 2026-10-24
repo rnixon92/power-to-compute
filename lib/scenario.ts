@@ -33,6 +33,10 @@ export interface Scenario {
   dilution: number;
   /** IT megawatts per gross or utility megawatt. */
   conversion: number;
+  /** Multiple on annual gross profit, after its share of overhead, for businesses outside the AI forecast. */
+  otherMultiple: number;
+  /** Count stock-based pay as a cost inside overhead. */
+  stockPay: boolean;
 }
 
 export const TIERS: Tier[] = ["live", "contracted", "announced", "pipeline"];
@@ -74,6 +78,8 @@ export const defaultScenario: Scenario = {
   slip: 0,
   dilution: 0,
   conversion: 0.7,
+  otherMultiple: 4,
+  stockPay: true,
 };
 
 export type PresetId = "bear" | "base" | "bull";
@@ -179,6 +185,7 @@ const numParams: { key: NumKey; q: string; scale: number; min: number; max: numb
   { key: "slip", q: "slip", scale: 1, min: 0, max: 36 },
   { key: "dilution", q: "dil", scale: 100, min: 0, max: 30 },
   { key: "conversion", q: "cv", scale: 100, min: 30, max: 100 },
+  { key: "otherMultiple", q: "om", scale: 1, min: 0, max: 15 },
 ];
 
 const tierCode: Record<Tier, string> = { live: "l", contracted: "c", announced: "a", pipeline: "p" };
@@ -189,6 +196,7 @@ export function encodeScenario(s: Scenario): string {
     if (s[key] !== defaultScenario[key]) p.set(q, String(Math.round(s[key] * scale * 100) / 100));
   }
   if (s.basis !== defaultScenario.basis) p.set("b", s.basis);
+  if (s.stockPay !== defaultScenario.stockPay) p.set("sp", s.stockPay ? "1" : "0");
   const tiers = TIERS.filter((t) => s.tiers[t]).map((t) => tierCode[t]).join("");
   const defaultTiers = TIERS.filter((t) => defaultScenario.tiers[t]).map((t) => tierCode[t]).join("");
   if (tiers !== defaultTiers) p.set("t", tiers || "-");
@@ -206,6 +214,7 @@ export function decodeScenario(params: URLSearchParams): Scenario {
     if (!Number.isFinite(n)) continue;
     s[key] = Math.min(max, Math.max(min, n)) / scale;
   }
+  if (params.get("sp") === "0") s.stockPay = false;
   const basis = params.get("b");
   if (basis === "ebitda" || basis === "cap") s.basis = basis;
   const t = params.get("t");

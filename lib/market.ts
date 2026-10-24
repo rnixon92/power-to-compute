@@ -44,7 +44,7 @@ export async function refreshMarket(): Promise<MarketBook> {
       quotes.push(await fetchQuote(ticker));
     }
   }
-  await Promise.all([worker(), worker()]);
+  const [btc] = await Promise.all([fetchBtc(), worker(), worker()]);
   quotes.sort((a, b) => tickers.indexOf(a.ticker) - tickers.indexOf(b.ticker));
   const book: MarketBook = {
     fetchedAt: new Date().toISOString(),
@@ -52,11 +52,25 @@ export async function refreshMarket(): Promise<MarketBook> {
     stale: false,
     note: "Last sale and Street targets refresh from Nasdaq. Shares are market cap divided by the price shown. The megawatt ledger is not updated by this feed.",
     quotes,
+    btc,
   };
   await fs.mkdir(path.dirname(SNAP), { recursive: true });
   await fs.writeFile(SNAP, JSON.stringify(book));
   memory = { at: Date.now(), data: book };
   return book;
+}
+
+/** Bitcoin spot from Coinbase's public price endpoint. Null when it does not answer, and the model falls back to the June 30 price. */
+async function fetchBtc(): Promise<MarketBook["btc"]> {
+  try {
+    const res = await fetch("https://api.coinbase.com/v2/prices/BTC-USD/spot", { cache: "no-store", signal: AbortSignal.timeout(10000) });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { data?: { amount?: string } };
+    const price = Number(body.data?.amount);
+    return Number.isFinite(price) && price > 0 ? { price, asOf: new Date().toISOString() } : null;
+  } catch {
+    return null;
+  }
 }
 
 async function readSnap(): Promise<MarketBook | null> {

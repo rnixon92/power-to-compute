@@ -42,7 +42,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <Suspense>
           <ScenarioProvider>
             <TopBar quotes={quotes} />
-            <Assumptions />
+            <Assumptions btc={market.btc ?? null} />
             {children}
             <footer className="footer">
               <div className="wrap">

@@ -123,6 +123,44 @@ export interface CapitalItem {
   source: string;
 }
 
+export interface BalanceLine {
+  label: string;
+  value: number;
+  note?: string;
+}
+
+/**
+ * The rest of the business, from the latest 10-Q or 10-K. Everything here is a reported
+ * balance at `asOf`, except overhead and gross profit, which annualize the latest quarter.
+ */
+export interface Balance {
+  asOf: string;
+  source: string;
+  /** Cash, equivalents and restricted cash. */
+  cash: number;
+  /** Bitcoin held, in coins, including any loaned or pledged. Valued at the live price. */
+  bitcoin?: number;
+  otherAssets?: BalanceLine[];
+  /** Every borrowing, including convertible notes and finance leases, at carrying amount. */
+  debt: number;
+  debtNote: string;
+  /** Other claims ahead of common shareholders: warrants, minority interests, preferred stock. */
+  claims?: BalanceLine[];
+  /**
+   * For a financial firm whose book already marks its holdings: total equity replaces the cash,
+   * bitcoin and debt lines, and the AI build cost already spent comes out of it.
+   */
+  bookEquity?: number;
+  bookNote?: string;
+  /** Annual corporate overhead: selling, general and administrative cost, latest quarter × 4. */
+  overhead: number;
+  /** The stock-based pay inside that overhead, annualized the same way. */
+  stockPay: number;
+  overheadNote: string;
+  /** Operations outside the AI forecast, such as bitcoin mining, as annual gross profit before overhead. */
+  other?: { label: string; grossProfit: number; note: string };
+}
+
 export interface Company {
   ticker: string;
   name: string;
@@ -141,6 +179,7 @@ export interface Company {
   capital?: CapitalItem[];
   /** Business lines the HPC model leaves out, so the reader knows what else is in the share price. */
   outside?: string;
+  balance?: Balance;
 }
 
 export interface DailyClose {
@@ -182,4 +221,6 @@ export interface MarketBook {
   stale: boolean;
   note: string;
   quotes: Quote[];
+  /** Bitcoin spot price, for valuing coins on balance sheets. */
+  btc?: { price: number; asOf: string } | null;
 }

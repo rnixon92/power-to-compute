@@ -10,7 +10,7 @@ import { Segmented, Slider } from "@/components/ui";
 
 const YEARS = [2026, 2027, 2028, 2029, 2030];
 
-export function Assumptions() {
+export function Assumptions({ btc }: { btc: { price: number; asOf: string } | null }) {
   const { scenario: s, set, replace, panel, closePanel } = useScenario();
   const [copied, setCopied] = useState(false);
   const leaseHint = disclosedLeaseRate(book);
@@ -97,6 +97,18 @@ export function Assumptions() {
               <Slider label="IT MW per gross MW" value={s.conversion} min={0.5} max={0.9} step={0.01} format={(v) => v.toFixed(2)} hint="Helios, River Bend and Beacon Point sit at 0.67–0.74." onChange={(v) => set({ conversion: v })} />
             </div>
           </details>
+        </section>
+
+        <section className="assume-group">
+          <h3>Rest of the business</h3>
+          <p className="note">Cash, bitcoin, debt and other claims come from each company&apos;s latest 10-Q. Overhead is shared between the AI business and anything else by gross profit.</p>
+          <div style={{ display: "grid", gap: 8 }}>
+            <div className="slider-top"><span>Stock-based pay</span></div>
+            <Segmented label="Stock-based pay" size="sm" value={s.stockPay ? "count" : "skip"} onChange={(v) => set({ stockPay: v === "count" })} options={[{ value: "count", label: "Count as a cost" }, { value: "skip", label: "Leave it out" }]} />
+            <small className="note">It is a real cost to shareholders, paid in new shares. Several of these companies pay $100M+ a year this way.</small>
+          </div>
+          <Slider label="Mining and other businesses" value={s.otherMultiple} min={0} max={10} step={0.5} format={(v) => (v ? `${v}× gross profit` : "Not counted")} hint="Applied to annual gross profit after the business's share of overhead. A business that loses money counts as zero." onChange={(v) => set({ otherMultiple: v })} />
+          <p className="note">Bitcoin is valued at {btc ? `$${Math.round(btc.price).toLocaleString("en-US")}, live from Coinbase` : "the June 30 price of $58,540, because the live price did not load"}.</p>
         </section>
 
         <section className="assume-group">

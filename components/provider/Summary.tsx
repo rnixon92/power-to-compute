@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { Company, Quote } from "@/data/types";
-import { blocks, priceByYear, sumTiers, upside, valuation, type Valuation } from "@/lib/forecast";
+import type { Company } from "@/data/types";
+import { blocks, priceByYear, sumTiers, upside, valuation, type Ctx, type Valuation } from "@/lib/forecast";
 import { appliedBasis, scenarioChip, tierLabel } from "@/lib/scenario";
 import { tierVar } from "@/lib/palette";
-import { mw, px, quarter, usdCompact } from "@/lib/format";
+import { isoToLabel, mw, px, quarter, usdCompact } from "@/lib/format";
 import { useScenario } from "@/components/ScenarioProvider";
 
 const SHOWN = 5;
@@ -16,12 +16,13 @@ function signedDollars(n: number | null): string {
   return `${n > 0 ? "+" : "−"}${px(Math.abs(n))}`;
 }
 
-export function Summary({ company, quote, value, multiple }: { company: Company; quote?: Quote; value: Valuation; multiple: number | null }) {
+export function Summary({ company, ctx, value, multiple }: { company: Company; ctx: Ctx; value: Valuation; multiple: number | null }) {
+  const quote = ctx.quote;
   const { scenario: s, toggleRamp, setRamps, set, openPanel } = useScenario();
   const chip = scenarioChip(s);
   const gpu = company.model === "gpu-cloud";
   const [all, setAll] = useState(false);
-  const rows = useMemo(() => upside(company, s, quote), [company, s, quote]);
+  const rows = useMemo(() => upside(company, s, ctx), [company, s, ctx]);
   const name = company.name;
   const onMw = sumTiers(value.target.mw);
   const cap = quote?.marketCap ? usdCompact(quote.marketCap) : null;
@@ -35,14 +36,14 @@ export function Summary({ company, quote, value, multiple }: { company: Company;
     if (!rows.length) return null;
     const sc = { ...s, year: lastYear, on: [...s.on, ...rows.map((r) => r.block.ramp.id)], off: s.off.filter((id) => !rows.some((r) => r.block.ramp.id === id)) };
     const base = { ...s, year: lastYear };
-    const a = valuation(blocks(company, sc), sc, quote, company.model).price;
-    const b = valuation(blocks(company, base), base, quote, company.model).price;
+    const a = valuation(company, blocks(company, sc), sc, ctx).price;
+    const b = valuation(company, blocks(company, base), base, ctx).price;
     return a != null && b != null ? a - b : null;
-  }, [rows, s, lastYear, company, quote]);
+  }, [rows, s, lastYear, company, ctx]);
   const shown = all ? rows : rows.slice(0, SHOWN);
   // Once every site is built by the valuation year, "now" and "once built" are the same number.
   const later = rows.some((r) => r.builtYear !== s.year);
-  const years = useMemo(() => priceByYear(company, s, quote), [company, s, quote]);
+  const years = useMemo(() => priceByYear(company, s, ctx), [company, s, ctx]);
 
   return (
     <div className="card summary">
@@ -52,29 +53,32 @@ export function Summary({ company, quote, value, multiple }: { company: Company;
         <span className="note">{gpu ? "IREN is a GPU cloud, so it stays on the earnings multiple. A cap rate does not apply here." : s.basis === "cap" ? "This price capitalizes NOI at your cap rate and subtracts project debt." : "The lease rate fills sites with no disclosed rent. It does not move IREN."}</span>
       </button>
       <div className="summary-text">
-        {ok ? (
-          <>
-            <p className="lead">
-              At {px(quote?.price ?? null)}{cap ? `, the market values ${name} at ${cap}` : ""}. Your scenario puts the {mw(onMw)} switched on at{" "}
-              <b>{px(value.price)}</b> a share, {pctWord(value.upside)} today&apos;s price.
-            </p>
-            <p>
-              {multiple != null && basis === "cap"
-                ? <>Today&apos;s price implies a <b>{(multiple * 100).toFixed(1)}%</b> cap rate on the end-{s.year} NOI, after debt. Your scenario uses {(s.capRate * 100).toFixed(1)}%.</>
-                : multiple != null
-                  ? <>Put another way, today&apos;s price pays <b>{multiple.toFixed(1)}×</b> {basisWord} at the end-{s.year} run-rate. Your scenario uses {s.multiple}×.</>
-                  : <>Earnings at the end of {s.year} are negative in your scenario, so there&apos;s no market multiple to compare.</>}
-            </p>
-          </>
-        ) : onMw > 0 ? (
+        {onMw === 0 ? (
           <p className="lead">
-            {name}&apos;s switched-on capacity earns less than it costs to carry at the end of {s.year} in your scenario. Open assumptions and try a later year, a higher margin or a longer depreciation life.
+            {name} has no AI lease switched on.{" "}
+            {ok
+              ? <>Its cash, bitcoin and other businesses, less debt, come to <b>{px(value.price)}</b> a share, {pctWord(value.upside)} today&apos;s price. The rest of {cap ? `its ${cap} market value` : "its market value"} is a bet on the power listed below.</>
+              : <>Its debt and other claims come to more than its cash, bitcoin and other businesses, so the rest of {cap ? `its ${cap} market value` : "its market value"} is a bet on the power listed below.</>}
+          </p>
+        ) : ok ? (
+          <p className="lead">
+            At {px(quote?.price ?? null)}{cap ? `, the market values ${name} at ${cap}` : ""}. Your scenario puts the {mw(onMw)} switched on, plus the rest of the balance sheet, at{" "}
+            <b>{px(value.price)}</b> a share, {pctWord(value.upside)} today&apos;s price.
           </p>
         ) : (
           <p className="lead">
-            {name} has no signed AI lease yet, so {cap ? `its ${cap} market value` : "its market value"} rests on the rest of the business today. Its power is listed below as options you can switch on.
+            In your scenario, {name}&apos;s debt, other claims and the build cost still to spend come to more than its AI business and other assets are worth at the end of {s.year}, so the shares come out at zero.
           </p>
         )}
+        {onMw > 0 ? (
+          <p>
+            {multiple != null && basis === "cap"
+              ? <>Today&apos;s price implies a <b>{(multiple * 100).toFixed(1)}%</b> cap rate on the end-{s.year} NOI after overhead, with the balance sheet as it is. Your scenario uses {(s.capRate * 100).toFixed(1)}%.</>
+              : multiple != null
+                ? <>Put another way, today&apos;s price pays <b>{multiple.toFixed(1)}×</b> {basisWord} at the end-{s.year} run-rate, with the balance sheet as it is. Your scenario uses {s.multiple}×.</>
+                : <>Earnings after overhead are negative at the end of {s.year} in your scenario, so there&apos;s no market multiple to compare.</>}
+          </p>
+        ) : null}
         <div className="year-row">
           <span className="note">Implied today, valuing the run-rate at the end of</span>
           <div className="year-strip" role="radiogroup" aria-label="Valuation year">
@@ -161,39 +165,51 @@ export function PriceBridge({ company, value }: { company: Company; value: Valua
   const gpu = company.model === "gpu-cloud";
   const basis = appliedBasis(company.model, s);
   const t = value.target;
+  const ai = value.ai;
   const revenue = sumTiers(t.revenue);
-  const pretax = t.noi - t.da - t.interest;
-  const tax = pretax > 0 ? pretax * s.tax : 0;
   const ok = value.price != null && value.price > 0;
+  const tax = Math.max(0, ai.noi - t.da - t.interest) * s.tax;
+  const asOf = company.balance?.asOf;
   return (
     <div className="card card-pad" style={{ marginTop: 14 }}>
-      <div className="eyebrow">How this price is built, end {s.year}</div>
-      <div className="bridge" style={{ marginTop: 8, maxWidth: 520 }}>
-        <div><span>Revenue run-rate</span><b>{usdCompact(revenue)}</b></div>
-        <div><span>{gpu ? "Project EBITDA" : "NOI"}{revenue ? ` · ${Math.round((t.noi / revenue) * 100)}%` : ""}</span><b>{usdCompact(t.noi)}</b></div>
-        {basis === "pe" ? (
-          <>
-            <div><span>Depreciation</span><b>−{usdCompact(t.da)}</b></div>
-            <div><span>Interest on {Math.round(s.leverage * 100)}% debt</span><b>−{usdCompact(t.interest)}</b></div>
-            <div><span>Tax</span><b>−{usdCompact(tax)}</b></div>
-            <div className="total"><span>Earnings</span><b>{usdCompact(t.earnings)}</b></div>
-            <div><span>× {s.multiple} = equity value</span><b>{usdCompact(value.equity)}</b></div>
-          </>
-        ) : basis === "cap" ? (
-          <>
-            <div><span>NOI ÷ {(s.capRate * 100).toFixed(1)}% cap rate</span><b>{usdCompact(t.noi / s.capRate)}</b></div>
-            <div><span>Project debt</span><b>−{usdCompact(t.debt)}</b></div>
-            <div className="total"><span>Equity value</span><b>{usdCompact(value.equity)}</b></div>
-          </>
-        ) : (
-          <>
-            <div><span>Project debt</span><b>−{usdCompact(t.debt)}</b></div>
-            <div><span>× {s.multiple}, then debt off</span><b>{usdCompact(value.equity)}</b></div>
-          </>
-        )}
-        <div><span>÷ {value.shares ? `${(value.shares / 1e6).toFixed(0)}M shares` : "shares"}</span><b>{px(value.futurePrice)}</b></div>
-        <div className="total"><span>Discounted to today</span><b>{ok ? px(value.price) : "—"}</b></div>
+      <div className="bridge-cols">
+        <div>
+          <div className="eyebrow">The AI business, end {s.year}</div>
+          <div className="bridge" style={{ marginTop: 8 }}>
+            <div><span>Revenue run-rate</span><b>{usdCompact(revenue)}</b></div>
+            <div><span>{gpu ? "Project EBITDA" : "NOI"}{revenue ? ` · ${Math.round((t.noi / revenue) * 100)}%` : ""}</span><b>{usdCompact(t.noi)}</b></div>
+            <div><span>Overhead, its share</span><b>−{usdCompact(ai.overheadAi)}</b></div>
+            {basis === "pe" ? (
+              <>
+                <div><span>Depreciation</span><b>−{usdCompact(t.da)}</b></div>
+                <div><span>Interest on {Math.round(s.leverage * 100)}% build debt</span><b>−{usdCompact(t.interest)}</b></div>
+                <div><span>Tax</span><b>−{usdCompact(tax)}</b></div>
+                <div className="total"><span>Earnings × {s.multiple}, plus that build debt</span><b>{usdCompact(ai.ev)}</b></div>
+              </>
+            ) : basis === "cap" ? (
+              <div className="total"><span>NOI ÷ {(s.capRate * 100).toFixed(1)}% cap rate</span><b>{usdCompact(ai.ev)}</b></div>
+            ) : (
+              <div className="total"><span>NOI × {s.multiple}</span><b>{usdCompact(ai.ev)}</b></div>
+            )}
+            <div className="total"><span>Discounted {value.years.toFixed(1)} years at {(s.discount * 100).toFixed(1)}%</span><b>{usdCompact(value.aiToday)}</b></div>
+          </div>
+        </div>
+        <div>
+          <div className="eyebrow">The rest of the company{asOf ? `, balance sheet at ${isoToLabel(asOf)}` : ""}</div>
+          <div className="bridge" style={{ marginTop: 8 }}>
+            <div><span>AI business today</span><b>{usdCompact(value.aiToday)}</b></div>
+            {company.balance?.other ? (
+              <div title={company.balance.other.note}><span>{company.balance.other.label}, {s.otherMultiple}× gross profit after its overhead</span><b>{usdCompact(ai.otherValue)}</b></div>
+            ) : null}
+            {value.bridge.lines.map((l) => (
+              <div key={l.label} title={l.note}><span>{l.label}</span><b>{l.value < 0 ? "−" : "+"}{usdCompact(Math.abs(l.value))}</b></div>
+            ))}
+            <div className="total"><span>Equity value today</span><b>{usdCompact(value.equity)}</b></div>
+            <div><span>÷ {value.shares ? `${(value.shares / 1e6).toFixed(0)}M shares` : "shares"}</span><b>{ok ? px(value.price) : "—"}</b></div>
+          </div>
+        </div>
       </div>
+      {!company.balance ? <p className="note" style={{ marginTop: 10 }}>No balance sheet in the ledger yet, so cash and debt are left out.</p> : null}
     </div>
   );
 }
