@@ -79,12 +79,20 @@ export function Assumptions({ btc }: { btc: { price: number; asOf: string } | nu
             <Segmented label="Valuation year" value={s.year} onChange={(y) => set({ year: y })} options={YEARS.map((y) => ({ value: y, label: String(y) }))} />
           </div>
           <TierToggles ramps={ramps} />
+          <Slider label="Chance unsigned power gets leased" value={s.leaseOdds} min={0} max={1} step={0.05} format={(v) => `${Math.round(v * 100)}%`} hint="For sites with no tenant yet and future options you switch on. Their rent and build cost both count at this share, so each adds its expected value." onChange={(v) => set({ leaseOdds: v })} />
           <div className="slider-top"><span>Value landlords on</span></div>
-          <Segmented label="Valuation basis" size="sm" value={s.basis} onChange={(b) => set({ basis: b })} options={[{ value: "pe", label: "Earnings" }, { value: "ebitda", label: "EBITDA" }, { value: "cap", label: "Cap rate" }]} />
+          <Segmented label="Valuation basis" size="sm" value={s.basis} onChange={(b) => set({ basis: b })} options={[{ value: "dcf", label: "Lease DCF" }, { value: "pe", label: "Earnings" }, { value: "ebitda", label: "EBITDA" }, { value: "cap", label: "Cap rate" }]} />
+          {s.basis === "dcf" ? (
+            <>
+              <p className="note">Every month of rent over each lease&apos;s life, after overhead and tax, less build cost when it is spent, with each site sold at the exit cap rate in 2050. The valuation year does not apply.</p>
+              <Slider label="Required return" value={s.dcfRate} min={0.05} max={0.14} step={0.0025} format={(v) => `${(v * 100).toFixed(2).replace(/0$/, "")}%`} hint="Investment-grade project debt here costs 6–7.75%. Equity asks more." onChange={(v) => set({ dcfRate: v })} />
+              <Slider label="Exit cap rate, 2050" value={s.exitCap} min={0.05} max={0.1} step={0.0025} format={(v) => `${(v * 100).toFixed(2).replace(/0$/, "")}%`} hint="What a powered, leased site sells for at the end of the forecast. Higher is more cautious." onChange={(v) => set({ exitCap: v })} />
+            </>
+          ) : null}
           {s.basis === "cap" ? (
             <Slider label="Cap rate" value={s.capRate} min={0.05} max={0.1} step={0.001} format={(v) => `${(v * 100).toFixed(1)}%`} hint="Morgan Stanley's terminal rate on Hut 8 is 6.7%. A higher cap rate is a lower price. The default here is 7.5%." onChange={(v) => set({ capRate: v })} />
           ) : null}
-          <Slider label={s.basis === "cap" ? "IREN earnings multiple" : "Multiple"} value={s.multiple} min={6} max={40} format={(v) => `${v}×`} hint={s.basis === "cap" ? "IREN sells compute, so a cap rate does not apply. It stays on earnings." : undefined} onChange={(v) => set({ multiple: v })} />
+          <Slider label={s.basis === "cap" || s.basis === "dcf" ? "IREN earnings multiple" : "Multiple"} value={s.multiple} min={6} max={40} format={(v) => `${v}×`} hint={s.basis === "cap" || s.basis === "dcf" ? "IREN sells compute on short contracts, so it stays on earnings." : undefined} onChange={(v) => set({ multiple: v })} />
           <Slider label="Delay on future deliveries" value={s.slip} min={0} max={24} format={(v) => (v ? `${v} months` : "On schedule")} onChange={(v) => set({ slip: v })} />
           <details className="adv">
             <summary>Discount, debt and tax <span aria-hidden="true">+</span></summary>

@@ -29,6 +29,8 @@ export interface Block {
   escalatorFrom: "company" | "assumed" | "none";
   /** Divides an average-over-term rent down to the first year's rent. 1 when the figure is already a first-year rent. */
   averageFactor: number;
+  /** Share of this block's money that counts: your lease odds for sites with no signed tenant, 1 otherwise. */
+  weight: number;
 }
 
 /** Average of (1 + g)^k over a term of T years. A rent quoted as the term average is this many times the first year's rent. */
@@ -115,6 +117,7 @@ export function block(company: Company, ramp: Ramp, s: Scenario): Block {
     escalator,
     escalatorFrom,
     averageFactor: basis === "average" ? averageFactor(escalator, ramp.termYears ?? 15) : 1,
+    weight: ramp.tier === "announced" || ramp.tier === "pipeline" ? s.leaseOdds : 1,
   };
 }
 
@@ -161,11 +164,12 @@ export function pointAt(list: Block[], s: Scenario, t: number): Point {
     mwAll += f * b.itMw;
     revenueAll += f * b.revenue * k;
     if (!b.enabled) continue;
+    const w = f * b.weight;
     mw[b.ramp.tier] += f * b.itMw;
-    revenue[b.ramp.tier] += f * b.revenue * k;
-    noi += f * b.noi * k;
-    da += (f * b.capex) / b.life;
-    const d = f * b.capex * s.leverage;
+    revenue[b.ramp.tier] += w * b.revenue * k;
+    noi += w * b.noi * k;
+    da += (w * b.capex) / b.life;
+    const d = w * b.capex * s.leverage;
     debt += d;
     interest += d * s.interest;
   }
@@ -250,7 +254,11 @@ export function aiValueAt(company: Company, p: Point, s: Scenario): AiValue {
   const pretax = noi - p.da - p.interest;
   const earnings = pretax > 0 ? pretax * (1 - s.tax) : pretax;
   const basis = appliedBasis(company.model, s);
-  const ev = basis === "cap" ? noi / s.capRate : basis === "ebitda" ? noi * s.multiple : earnings * s.multiple + p.debt;
+  const ev =
+    basis === "cap" ? noi / s.capRate
+    : basis === "dcf" ? noi / s.exitCap
+    : basis === "ebitda" ? noi * s.multiple
+    : earnings * s.multiple + p.debt;
   const otherValue = s.otherMultiple * Math.max(0, (company.balance?.other?.grossProfit ?? 0) - overheadOther);
   return { ev, noi, overheadAi, overheadOther, earnings, otherValue };
 }
@@ -276,11 +284,11 @@ export function bridge(company: Company, list: Block[], ctx: Ctx, at: number): B
   const now = Date.parse(TODAY);
   const on = list.filter((b) => b.enabled);
   // Only capacity earning by the valuation date is in the AI value, so only its build cost comes off.
-  const remaining = on.reduce((a, b) => a + b.capex * Math.max(0, online(b, at) - spentShare(b, now)), 0);
+  const remaining = on.reduce((a, b) => a + b.weight * b.capex * Math.max(0, online(b, at) - spentShare(b, now)), 0);
   const lines: BridgeLine[] = [];
   const bal = company.balance;
   if (bal?.bookEquity != null) {
-    const spent = on.reduce((a, b) => a + b.capex * spentShare(b, now), 0);
+    const spent = on.reduce((a, b) => a + b.weight * b.capex * spentShare(b, now), 0);
     lines.push({ label: "Book equity", value: bal.bookEquity, note: bal.bookNote });
     lines.push({ label: "AI build cost already in book", value: -spent, note: "Taken out so the data centers are not counted twice." });
   } else if (bal) {
@@ -322,6 +330,69 @@ export function interimCash(company: Company, list: Block[], s: Scenario, to: nu
   return { pv, total };
 }
 
+/** Lease DCF runs monthly to here, then values each site at the exit cap rate. */
+export const DCF_END = Date.UTC(2050, 11, 31);
+
+export interface Dcf {
+  /** NOI after overhead and tax, each month to 2050, discounted. */
+  operating: number;
+  /** Build cost in the month it is spent, discounted. */
+  capex: number;
+  /** Sites valued at the exit cap rate in 2050, discounted. */
+  terminal: number;
+}
+
+function nextMonth(t: number): number {
+  const d = new Date(t);
+  d.setUTCMonth(d.getUTCMonth() + 1);
+  return d.getTime();
+}
+
+/** Monthly lease cash flows to 2050. They do not depend on the discount rate, so they are built once and discounted as needed. */
+export interface LeaseFlows {
+  years: number[];
+  operating: number[];
+  capex: number[];
+  /** NOI after overhead in 2050, for the exit value. */
+  endNoi: number;
+}
+
+export function leaseFlows(company: Company, list: Block[], s: Scenario): LeaseFlows {
+  const now = Date.parse(TODAY);
+  const on = list.filter((b) => b.enabled);
+  const years: number[] = [];
+  const operating: number[] = [];
+  const capex: number[] = [];
+  for (let t = now; t < DCF_END; t = nextMonth(t)) {
+    const t2 = nextMonth(t);
+    const p = pointAt(list, s, t);
+    const ai = aiValueAt(company, p, s);
+    const tax = Math.max(0, ai.noi - p.da) * s.tax;
+    years.push((t - now) / YEAR);
+    operating.push((ai.noi - tax) / 12);
+    capex.push(on.reduce((a, b) => a + b.weight * b.capex * (spentShare(b, t2) - spentShare(b, t)), 0));
+  }
+  const endNoi = aiValueAt(company, pointAt(list, s, DCF_END), s).noi;
+  return { years, operating, capex, endNoi };
+}
+
+export function discountFlows(f: LeaseFlows, r: number, exitCap: number): Dcf {
+  let operating = 0;
+  let capex = 0;
+  for (let i = 0; i < f.years.length; i++) {
+    const df = Math.pow(1 + r, f.years[i]);
+    operating += f.operating[i] / df;
+    capex += f.capex[i] / df;
+  }
+  const terminal = f.endNoi / exitCap / Math.pow(1 + r, (DCF_END - Date.parse(TODAY)) / YEAR);
+  return { operating, capex, terminal };
+}
+
+/** Cash flows of the switched-on leases over their life, discounted at rate r. */
+export function leaseDcf(company: Company, list: Block[], s: Scenario, r: number): Dcf {
+  return discountFlows(leaseFlows(company, list, s), r, s.exitCap);
+}
+
 export interface Valuation {
   target: Point;
   targetDate: string;
@@ -332,6 +403,8 @@ export interface Valuation {
   /** Cash the AI business earns before the target date, discounted to today. */
   interimToday: number;
   bridge: Bridge;
+  /** Set on the lease DCF basis. */
+  dcf?: Dcf;
   /** Equity value today. */
   equity: number;
   shares: number | null;
@@ -342,6 +415,7 @@ export interface Valuation {
 }
 
 export function valuation(company: Company, list: Block[], s: Scenario, ctx: Ctx): Valuation {
+  if (appliedBasis(company.model, s) === "dcf") return dcfValuation(company, list, s, ctx, s.dcfRate);
   const targetDate = `${s.year}-12-31`;
   const target = pointAt(list, s, Date.parse(targetDate));
   const ai = aiValueAt(company, target, s);
@@ -357,11 +431,33 @@ export function valuation(company: Company, list: Block[], s: Scenario, ctx: Ctx
   return { target, targetDate, years, ai, aiToday, interimToday: interim.pv, bridge: br, equity, shares, futurePrice, price, upside };
 }
 
+function dcfValuation(company: Company, list: Block[], s: Scenario, ctx: Ctx, r: number, flows?: LeaseFlows): Valuation {
+  const targetDate = `${s.year}-12-31`;
+  const target = pointAt(list, s, Date.parse(targetDate));
+  const ai = aiValueAt(company, target, s);
+  const dcf = discountFlows(flows ?? leaseFlows(company, list, s), r, s.exitCap);
+  // Build cost sits inside the cash flows here, so the bridge leaves out its own build line.
+  const full = bridge(company, list, ctx, DCF_END);
+  const lines = full.lines.filter((l) => l.label !== "Build cost still to spend");
+  const br: Bridge = { lines, net: lines.reduce((a, l) => a + l.value, 0), remaining: 0 };
+  const aiToday = dcf.operating - dcf.capex + dcf.terminal;
+  const equity = aiToday + ai.otherValue + br.net;
+  const shares = ctx.quote?.shares ? sharesAt(ctx.quote.shares, Date.parse(targetDate), s) : null;
+  const price = shares ? equity / shares : null;
+  const upside = price != null && ctx.quote?.price ? price / ctx.quote.price - 1 : null;
+  return { target, targetDate, years: 0, ai, aiToday, interimToday: 0, bridge: br, dcf, equity, shares, futurePrice: price, price, upside };
+}
+
 /** Implied value per share at each future month, before discounting. */
 export function pricePath(company: Company, list: Block[], points: Point[], s: Scenario, ctx: Ctx): { t: number; v: number }[] {
   const shares = ctx.quote?.shares;
   if (!shares) return [];
   const now = Date.parse(TODAY);
+  if (appliedBasis(company.model, s) === "dcf") {
+    // With no dividends, a DCF value grows at the return it is discounted at.
+    const today = valuation(company, list, s, ctx).price ?? 0;
+    return points.filter((p) => p.t >= now).map((p) => ({ t: p.t, v: today * Math.pow(1 + s.dcfRate, (p.t - now) / YEAR) }));
+  }
   return points
     .filter((p) => p.t >= now)
     .map((p) => {
@@ -390,6 +486,7 @@ export interface YearRow {
 /** Calendar-year totals, from the average of twelve monthly run-rates. */
 export function yearTable(company: Company, list: Block[], s: Scenario, ctx: Ctx): YearRow[] {
   const shares = ctx.quote?.shares ?? null;
+  const dcfPrice = appliedBasis(company.model, s) === "dcf" ? valuation(company, list, s, ctx).price : null;
   const rows: YearRow[] = [];
   for (let year = 2026; year <= 2030; year++) {
     let revenue = 0;
@@ -423,7 +520,9 @@ export function yearTable(company: Company, list: Block[], s: Scenario, ctx: Ctx
       exitRevenue: sumTiers(end.revenue),
       exitEarnings: endAi.earnings,
       eps: sh ? earnings / sh : null,
-      value: sh ? (endAi.ev + interimCash(company, list, s, end.t).total + endAi.otherValue + bridge(company, list, ctx, end.t).net) / sh : null,
+      value: dcfPrice != null
+        ? dcfPrice * Math.pow(1 + s.dcfRate, (end.t - Date.parse(TODAY)) / YEAR)
+        : sh ? (endAi.ev + interimCash(company, list, s, end.t).total + endAi.otherValue + bridge(company, list, ctx, end.t).net) / sh : null,
     });
   }
   return rows;
@@ -484,12 +583,34 @@ export function leaseRateOf(b: Block): number | null {
  */
 export function marketMultiple(company: Company, v: Valuation, s: Scenario, ctx: Ctx): number | null {
   if (!ctx.quote?.price || !v.shares) return null;
+  if (appliedBasis(company.model, s) === "dcf") return impliedReturn(company, s, ctx);
   const aiNeeded = (ctx.quote.price * v.shares - v.interimToday - v.ai.otherValue - v.bridge.net) * Math.pow(1 + s.discount, v.years);
   const basis = appliedBasis(company.model, s);
   if (basis === "cap") return v.ai.noi > 0 && aiNeeded > 0 ? v.ai.noi / aiNeeded : null;
   if (basis === "ebitda") return v.ai.noi > 0 && aiNeeded > 0 ? aiNeeded / v.ai.noi : null;
   const equityNeeded = aiNeeded - v.target.debt;
   return v.ai.earnings > 0 && equityNeeded > 0 ? equityNeeded / v.ai.earnings : null;
+}
+
+/**
+ * The annual return today's price implies on the lease DCF: the discount rate at which the model lands on the market price.
+ * Value falls as the rate rises, so a bisection finds it. Null when no rate between 1% and 40% reaches the price.
+ */
+export function impliedReturn(company: Company, s: Scenario, ctx: Ctx): number | null {
+  const target = ctx.quote?.price;
+  if (!target) return null;
+  const list = blocks(company, s);
+  const flows = leaseFlows(company, list, s);
+  const at = (r: number) => dcfValuation(company, list, s, ctx, r, flows).price ?? NaN;
+  let lo = 0.01;
+  let hi = 0.4;
+  if (!(at(lo) >= target) || !(at(hi) <= target)) return null;
+  for (let i = 0; i < 30; i++) {
+    const mid = (lo + hi) / 2;
+    if (at(mid) > target) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
 }
 
 export interface Upside {

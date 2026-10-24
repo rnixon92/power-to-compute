@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { book, companies, companyByTicker } from "@/data/ledger";
-import { aiValueAt, averageFactor, blocks, rentScale, disclosedLeaseRate, marketMultiple, pointAt, priceByYear, signedMw, spentShare, sumTiers, upside, valuation, yearTable, type Ctx } from "@/lib/forecast";
+import { aiValueAt, averageFactor, blocks, impliedReturn, rentScale, disclosedLeaseRate, marketMultiple, pointAt, priceByYear, signedMw, spentShare, sumTiers, upside, valuation, yearTable, type Ctx } from "@/lib/forecast";
 import { reaction } from "@/lib/events";
 import { decodeScenario, defaultScenario, encodeScenario, presets, type Scenario } from "@/lib/scenario";
 
 const s = defaultScenario;
 const flat = { ...defaultScenario, escalator: 0 };
+/** The run-rate methods: value one year's run-rate and discount it. */
+const run = { ...defaultScenario, basis: "pe" as const };
 const ctx: Ctx = { quote: { shares: 400e6, price: 11 } as never, btc: 60_000 };
 const at = (ticker: string, iso: string, sc: Scenario = s) => pointAt(blocks(companyByTicker(ticker)!, sc), sc, Date.parse(iso));
 
@@ -96,12 +98,12 @@ describe("forecast", () => {
 
   it("values the AI business on earnings, EBITDA or a cap rate, and keeps IREN on earnings", () => {
     const hut = companyByTicker("HUT")!;
-    const pe = valuation(hut, blocks(hut, s), s, ctx);
+    const pe = valuation(hut, blocks(hut, run), run, ctx);
     expect(pe.ai.ev).toBeCloseTo(pe.ai.earnings * s.multiple + pe.target.debt, 0);
-    const eb = { ...s, basis: "ebitda" as const };
+    const eb = { ...run, basis: "ebitda" as const };
     const ev = valuation(hut, blocks(hut, eb), eb, ctx);
     expect(ev.ai.ev).toBeCloseTo(ev.ai.noi * s.multiple, 0);
-    const cap = { ...s, basis: "cap" as const, capRate: 0.075 };
+    const cap = { ...run, basis: "cap" as const, capRate: 0.075 };
     const c = valuation(hut, blocks(hut, cap), cap, ctx);
     expect(c.ai.ev).toBeCloseTo(c.ai.noi / 0.075, 0);
     const iren = companyByTicker("IREN")!;
@@ -159,14 +161,14 @@ describe("forecast", () => {
 
   it("charges build cost only for capacity earning by the valuation year", () => {
     const hut = companyByTicker("HUT")!;
-    const early = { ...s, year: 2026 };
+    const early = { ...run, year: 2026 };
     expect(valuation(hut, blocks(hut, early), early, ctx).bridge.remaining).toBe(0);
-    expect(valuation(hut, blocks(hut, s), s, ctx).bridge.remaining).toBeGreaterThan(0);
+    expect(valuation(hut, blocks(hut, run), run, ctx).bridge.remaining).toBeGreaterThan(0);
   });
 
   it("credits the cash earned before the valuation year, so a later year does not just discount the value away", () => {
     const hut = companyByTicker("HUT")!;
-    const at = (year: number) => ({ ...s, year });
+    const at = (year: number) => ({ ...run, year });
     const v28 = valuation(hut, blocks(hut, at(2028)), at(2028), ctx);
     const v30 = valuation(hut, blocks(hut, at(2030)), at(2030), ctx);
     expect(v30.interimToday).toBeGreaterThan(v28.interimToday);
@@ -187,6 +189,68 @@ describe("forecast", () => {
     expect(rows[0].revenue).toBe(0);
     expect(rows[4].noi).toBeGreaterThan(rows[3].noi);
     expect(rows[4].overhead).toBeGreaterThan(0);
+  });
+});
+
+describe("lease DCF", () => {
+  it("adds the lease cash flows, less build cost as it is spent, to the balance sheet", () => {
+    const hut = companyByTicker("HUT")!;
+    const v = valuation(hut, blocks(hut, s), s, ctx);
+    expect(v.dcf).toBeDefined();
+    expect(v.aiToday).toBeCloseTo(v.dcf!.operating - v.dcf!.capex + v.dcf!.terminal, 0);
+    expect(v.equity).toBeCloseTo(v.aiToday + v.ai.otherValue + v.bridge.net, 0);
+    expect(v.bridge.lines.map((l) => l.label)).not.toContain("Build cost still to spend");
+  });
+
+  it("values every signed landlord book above zero", () => {
+    for (const t of ["WULF", "GLXY", "CORZ", "CIFR", "APLD", "HUT"]) {
+      const c = companyByTicker(t)!;
+      const q = { shares: 400e6, price: 10 } as never;
+      expect(valuation(c, blocks(c, s), s, { quote: q, btc: 60_000 }).price!, t).toBeGreaterThan(0);
+    }
+  });
+
+  it("lowers value as the required return rises", () => {
+    const wulf = companyByTicker("WULF")!;
+    const low = valuation(wulf, blocks(wulf, { ...s, dcfRate: 0.07 }), { ...s, dcfRate: 0.07 }, ctx).price!;
+    const high = valuation(wulf, blocks(wulf, { ...s, dcfRate: 0.1 }), { ...s, dcfRate: 0.1 }, ctx).price!;
+    expect(low).toBeGreaterThan(high);
+  });
+
+  it("solves the return today's price implies", () => {
+    const wulf = companyByTicker("WULF")!;
+    const r = impliedReturn(wulf, s, ctx)!;
+    const at = { ...s, dcfRate: r };
+    expect(valuation(wulf, blocks(wulf, at), at, ctx).price!).toBeCloseTo(11, 4);
+  });
+
+  it("keeps IREN on earnings", () => {
+    const iren = companyByTicker("IREN")!;
+    expect(valuation(iren, blocks(iren, s), s, ctx).dcf).toBeUndefined();
+  });
+});
+
+describe("chance unsigned power gets leased", () => {
+  const wulf = companyByTicker("WULF")!;
+  const price = (odds: number, on: string[] = ["wulf-muskie-1", "wulf-muskie-2"]) => {
+    const sc = { ...s, leaseOdds: odds, on };
+    return valuation(wulf, blocks(wulf, sc), sc, ctx).price!;
+  };
+
+  it("adds nothing at 0% and about half at 50%", () => {
+    const signed = price(1, []);
+    expect(price(0)).toBeCloseTo(signed, 6);
+    const full = price(1) - signed;
+    const half = price(0.5) - signed;
+    expect(half / full).toBeGreaterThan(0.4);
+    expect(half / full).toBeLessThan(0.6);
+  });
+
+  it("leaves signed leases at full weight", () => {
+    for (const b of blocks(wulf, { ...s, leaseOdds: 0.1 })) {
+      if (b.ramp.tier === "live" || b.ramp.tier === "contracted") expect(b.weight).toBe(1);
+      else expect(b.weight).toBe(0.1);
+    }
   });
 });
 
@@ -239,11 +303,11 @@ describe("scenario URL", () => {
 });
 
 describe("explaining the price", () => {
-  it("solves the multiple that lands on today's price", () => {
+  it("solves the multiple that lands on today'run price", () => {
     const wulf = companyByTicker("WULF")!;
-    const v = valuation(wulf, blocks(wulf, s), s, ctx);
-    const m = marketMultiple(wulf, v, s, ctx)!;
-    const at = { ...s, multiple: m };
+    const v = valuation(wulf, blocks(wulf, run), run, ctx);
+    const m = marketMultiple(wulf, v, run, ctx)!;
+    const at = { ...run, multiple: m };
     expect(valuation(wulf, blocks(wulf, at), at, ctx).price!).toBeCloseTo(11, 6);
   });
 

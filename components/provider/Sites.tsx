@@ -101,6 +101,7 @@ function SiteCard({ campus, blocks, today, source }: { campus: Campus; blocks: B
                 <b>
                   {r.label}
                   <span className="pill"><i className="swatch" style={{ background: tierVar(r.tier), width: 8, height: 8 }} />{tierLabel[r.tier]}</span>
+                  {b.enabled && b.weight < 1 ? <span className="pill est" title="Your chance that this site gets leased. Its rent and build cost both count at this share.">Counted at {Math.round(b.weight * 100)}%</span> : null}
                 </b>
                 {r.tenant ? <small className="ink-2" style={{ display: "block", marginTop: 2 }}>{r.tenant}</small> : null}
                 {r.note ? <p>{r.note}</p> : null}
