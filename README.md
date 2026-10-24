@@ -2,15 +2,17 @@
 
 An investor tracker for the bitcoin miners turning their power into AI data centers: IREN, TeraWulf, Galaxy, Core Scientific, Cipher, Applied Digital, Hut 8, MARA, Riot and CleanSpark.
 
-It covers every site and phase, every signed lease, what each campus costs to build and how it's financed, and a forecast you control. Switch any site on or off (including announced sites with no tenant yet), set the lease rate, multiple and delays, and the implied share price updates. Every scenario lives in the URL, so you can share it as a link.
+It covers every site and phase, every signed lease, what each campus costs to build and how it's financed, each company's balance sheet, and a valuation you control. Switch any site on or off (including power with no tenant yet, at the chance of leasing you set), pick a lease DCF, a cap rate or a multiple, and every implied share price updates. Every scenario lives in the URL, so you can share it as a link.
+
+**Live site:** https://rnixon92.github.io/power-to-compute/ — rebuilt hourly through the US trading day.
 
 ## Pages
 
 | Route | What's on it |
 | --- | --- |
-| `/` | Group totals, capacity and revenue ramps stacked by company, a card per company, relative value (market cap per signed MW, implied price vs last), and a map of every site. |
-| `/companies/[ticker]` | The deep dive. One chart with price history and implied value, capacity online and revenue run-rate on a shared timeline. Then a breakdown of each site with a switch for every phase, plus contracts, build cost, debt, a five-year model and sources. The scenario panel stays on screen as you scroll. |
-| `/demand` | US data-center power forecasts from EPRI, LBNL, Goldman Sachs and S&P side by side, the gap between scheduled and built capacity, and OpenRouter token growth. |
+| `/` | Group totals, capacity and revenue ramps stacked by company, a card per company, relative value (market cap per signed MW, implied price, and the return or cap rate today's price implies), a map of every site, and the latest deals. |
+| `/companies/[ticker]` | The deep dive. A plain-English summary of what the market pays and what's left out, the price breakdown from leases to balance sheet, a chart of price, capacity and revenue on one timeline, every site with a switch for each phase, contracts, a deal timeline, build cost and debt, a five-year model and sources. |
+| `/demand` | US data-center power forecasts side by side, grid queues at PJM, Dominion and ERCOT, usage growth, and the unsold power in the group. |
 | `/method` | How the model works, in plain English. |
 
 ## Running it
@@ -18,13 +20,14 @@ It covers every site and phase, every signed lease, what each campus costs to bu
 ```bash
 nvm use            # Node 22
 npm install
+npm run refresh    # fetch prices and filings; the build needs them
 npm run dev        # http://localhost:3000
 ```
 
 | Script | |
 | --- | --- |
 | `npm run dev` | Dev server |
-| `npm run build` / `npm start` | Production build and server |
+| `npm run build` | Static export to `out/` |
 | `npm test` | Model tests (Vitest) |
 | `npm run typecheck` | TypeScript |
 | `npm run check` | Both of the above |
@@ -59,19 +62,13 @@ Two rules keep the totals honest:
 
 ## Deploying
 
-The site is a static export (`out/`) hosted on Cloudflare Pages. `.github/workflows/deploy.yml` runs on every push to `main`, hourly through the US trading day on weekdays, and once daily. Each run refreshes the snapshots, tests, builds and uploads. If Nasdaq or EDGAR does not answer, the build uses the last committed snapshot. The daily run commits the snapshot back to the repo.
+The site is a static export hosted on GitHub Pages. `.github/workflows/deploy.yml` runs on every push to `main`, hourly through the US trading day on weekdays, and once daily. Each run refreshes prices and filings, tests, builds under the repo's subpath and publishes. Nasdaq prices are kept out of the repo: the last good snapshot sits in the Actions cache, and a run uses it if Nasdaq does not answer. The daily run commits the SEC filings snapshot, which also keeps the schedule from being paused.
 
-One-time setup:
-
-1. Create the Pages project: `npx wrangler login`, then `npx wrangler pages project create power-to-compute --production-branch=main`.
-2. In Cloudflare, create an API token with **Account › Cloudflare Pages › Edit**.
-3. Add two repository secrets: `gh secret set CLOUDFLARE_API_TOKEN` and `gh secret set CLOUDFLARE_ACCOUNT_ID` (the account ID is on the Cloudflare dashboard).
-
-To deploy by hand: `npm run refresh && npm run build && npx wrangler pages deploy out --project-name=power-to-compute`.
+To set up a fork: in **Settings › Pages**, set the source to **GitHub Actions**. That is all.
 
 ## Design
 
-- **Palette.** Company colors use a fixed categorical palette. The first eight slots were checked for colorblind separation in both themes, and the first three go to IREN, WULF and GLXY. Riot and CleanSpark take the last two. Capacity tiers use a single-hue ordinal blue ramp, so "how firm" reads light to dark. See `lib/palette.ts` and the tokens in `app/globals.css`.
+- **Palette.** Company colors use a fixed categorical palette. The eight slots were checked for colorblind separation in both themes, and the first three go to IREN, WULF and GLXY. Riot and CleanSpark share a neutral gray, always labeled with their tickers. Capacity tiers use a single-hue ordinal blue ramp, so "how firm" reads light to dark. See `lib/palette.ts` and the tokens in `app/globals.css`.
 - **No dual axes.** Price, capacity and revenue each get their own pane on a shared timeline, with one crosshair across all three.
 - **Light and dark** follow the system setting, with a toggle in the top bar.
 - **Mobile.** The scenario panel turns into a bottom bar that opens as a sheet.
@@ -83,3 +80,7 @@ Next.js 15 (App Router), React 19 and TypeScript. Charts are hand-built SVG usin
 ## Disclaimer
 
 A research tool. Company figures are their own disclosures, including forward-looking ones. Implied prices are the viewer's assumptions applied to those figures. Not investment advice.
+
+## License
+
+Code: [MIT](LICENSE). Research data in `data/`: [CC BY 4.0](data/LICENSE.md). Share prices are fetched at build time from Nasdaq's public quote pages and are not part of this repository.

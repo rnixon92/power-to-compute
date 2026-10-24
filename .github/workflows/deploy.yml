@@ -1,6 +1,6 @@
 name: Refresh and deploy
 
-# Rebuilds the static site with fresh prices and filings, then uploads it to Cloudflare Pages.
+# Rebuilds the static site with fresh prices and filings, then publishes it to GitHub Pages.
 on:
   push:
     branches: [main]
@@ -11,15 +11,18 @@ on:
     - cron: "30 11 * * *"
   workflow_dispatch:
 
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
 concurrency:
-  group: deploy
+  group: pages
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -28,27 +31,57 @@ jobs:
           cache: npm
       - run: npm ci
 
-      # If Nasdaq or EDGAR does not answer, the build uses the last committed snapshot.
+      # Nasdaq prices stay out of the repo. The last good snapshot lives in the Actions cache.
+      - name: Restore last price snapshot
+        uses: actions/cache/restore@v4
+        with:
+          path: data/snapshots/market.json
+          key: market-${{ github.run_id }}
+          restore-keys: market-
+
       - name: Refresh prices and filings
+        id: refresh
         run: npm run refresh
         continue-on-error: true
 
-      - run: npm test
-      - run: npm run build
-
-      - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
+      - name: Keep this snapshot for the next run
+        if: steps.refresh.outcome == 'success'
+        uses: actions/cache/save@v4
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy out --project-name=power-to-compute --branch=main --commit-dirty=true
+          path: data/snapshots/market.json
+          key: market-${{ github.run_id }}
 
-      # Keep the snapshot in the repo after the daily run, so local builds and fallbacks stay recent.
-      - name: Save snapshot
+      - name: Check there is a snapshot to build from
+        run: test -f data/snapshots/market.json
+
+      - run: npm test
+      - name: Build
+        run: npm run build
+        env:
+          PAGES_BASE_PATH: /${{ github.event.repository.name }}
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: out
+
+      # SEC filing dates are public. Committing them daily also keeps the schedule active,
+      # since GitHub pauses scheduled workflows in repos with no commits for 60 days.
+      - name: Save filings snapshot
         if: github.event.schedule == '30 11 * * *'
         run: |
           git config user.name "psp-refresh"
           git config user.email "psp-refresh@users.noreply.github.com"
-          git add data/snapshots
-          git diff --staged --quiet || git commit -m "Refresh price and filing snapshot"
+          git add data/snapshots/filings.json
+          git diff --staged --quiet || git commit -m "Refresh SEC filings snapshot"
           git push
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

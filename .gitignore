@@ -9,3 +9,5 @@ out
 .vercel
 .playwright-mcp
 coverage
+# Nasdaq prices are fetched at build time and kept out of the public repo.
+data/snapshots/market.json

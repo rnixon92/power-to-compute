@@ -14,6 +14,8 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      # Prices are fetched at build time, so CI fetches them too.
+      - run: npm run refresh
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
