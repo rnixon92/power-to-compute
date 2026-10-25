@@ -152,7 +152,7 @@ export function Assumptions({ btc }: { btc: { price: number; asOf: string } | nu
             </>
           )}
           <Slider label="Price on new contracts" value={s.gpuRate} min={3} max={30} step={0.5} format={(v) => `$${v.toFixed(1)}M/MW·yr`} hint="IREN's recent 3-year contracts are above $20M per MW a year, with talks near $25M. Used for capacity with no contract yet and for refilled halls." onChange={(v) => set({ gpuRate: v })} />
-          <Slider label="New contract length" value={s.gpuTerm} min={1} max={7} format={(v) => `${v} year${v === 1 ? "" : "s"}`} hint="Recent IREN contracts run 3 years. Microsoft's runs 5." onChange={(v) => set({ gpuTerm: v })} />
+          <Slider label="New contract length" value={s.gpuTerm} min={1} max={7} format={(v) => `${v} year${v === 1 ? "" : "s"}`} hint="Recent IREN contracts run 3 years. Also used for IREN's other 2026 contracts, whose terms are not broken out. Microsoft's runs 5." onChange={(v) => set({ gpuTerm: v })} />
           <Slider label="Price once the contract ends, share of it" value={s.gpuRelet} min={0} max={1} step={0.05} format={pct} hint="Older GPUs keep running at a lower price. IREN says prices for older generations have been climbing." onChange={(v) => set({ gpuRelet: v })} />
           <Slider label="GPU useful life" value={s.gpuLife} min={3} max={10} format={(v) => `${v} years`} hint="When a batch retires. CoreWeave depreciates its GPUs over six years." onChange={(v) => set({ gpuLife: v })} />
           <div style={{ display: "grid", gap: 8 }}>

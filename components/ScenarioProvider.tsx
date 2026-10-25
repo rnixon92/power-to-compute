@@ -30,11 +30,12 @@ export function ScenarioProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [scenario, setScenario] = useState<Scenario>(() => decodeScenario(new URLSearchParams(params.toString())));
   const [panel, setPanel] = useState(false);
-  const [showIren, setShowIren] = useState(() => params.get("iren") !== "0");
+  // The overview compares landlords. IREN sells compute and is valued its own way, so it joins only when asked.
+  const [showIren, setShowIren] = useState(() => params.get("iren") === "1");
   const query = useMemo(() => {
     const q = encodeScenario(scenario);
-    if (showIren) return q;
-    return q ? `${q}&iren=0` : "iren=0";
+    if (!showIren) return q;
+    return q ? `${q}&iren=1` : "iren=1";
   }, [scenario, showIren]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 

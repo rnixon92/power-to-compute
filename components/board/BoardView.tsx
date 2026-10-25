@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { book, watchlist } from "@/data/ledger";
 import type { Company, MarketBook, Tier } from "@/data/types";
 import { backlog, blocks, ctxFor, liveMw, marketMultiple, series, signedMw, sumTiers, tierMw, TODAY, valuation, type Point, type Valuation } from "@/lib/forecast";
-import { appliedBasis, TIERS, tierLabel } from "@/lib/scenario";
+import { appliedBasis, methodLine, TIERS, tierLabel } from "@/lib/scenario";
 import { companyVar, hasSlot, tierVar } from "@/lib/palette";
 import { implied, mw, mwTick, px, UNDER_ZERO, usdCompact, usdTick } from "@/lib/format";
 import { quoteFor } from "@/lib/quotes";
@@ -63,6 +63,7 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
   );
 
   const shown = showIren ? rows : rows.filter((r) => r.company.model !== "gpu-cloud");
+  const gpuRow = rows.find((r) => r.company.model === "gpu-cloud");
   const times = shown[0]?.points.map((p) => p.t) ?? [];
   const pick = (p: Point) => (metric === "mw" ? sumTiers(p.mw) : sumTiers(p.revenue));
   const slotted = shown.filter((r) => hasSlot(r.company.ticker));
@@ -133,7 +134,7 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
             label="IREN in the overview"
             value={showIren ? "on" : "off"}
             onChange={(v) => setShowIren(v === "on")}
-            options={[{ value: "on", label: "Include IREN" }, { value: "off", label: "Landlords only" }]}
+            options={[{ value: "off", label: "Landlords only" }, { value: "on", label: "Include IREN" }]}
           />
         </div>
       </section>
@@ -233,6 +234,7 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
               : <>Implied price is the end-{scenario.year} run-rate at {scenario.multiple}× {scenario.basis === "pe" ? "earnings" : "EBITDA"}, discounted to today.{scenario.gpuMethod === "dcf" ? irenLine : null}</>} Open a company for the site-by-site breakdown.</p>
           </div>
         </div>
+        {!showIren && gpuRow ? <GpuStrip row={gpuRow} market={market} href={href(`/companies/${gpuRow.company.ticker}`)} onInclude={() => setShowIren(true)} /> : null}
         <div className="grid-cards">
           {shown.map((r) => <ProviderCard key={r.company.ticker} row={r} market={market} href={href(`/companies/${r.company.ticker}`)} year={scenario.year} />)}
         </div>
@@ -403,3 +405,33 @@ function ProviderCard({ row, market, href, year }: { row: Row; market: MarketBoo
     </Link>
   );
 }
+
+/** IREN sits outside the landlord overview by default. This keeps it one glance and one click away. */
+function GpuStrip({ row, market, href, onInclude }: { row: Row; market: MarketBook; href: string; onInclude: () => void }) {
+  const { scenario } = useScenario();
+  const { company, value } = row;
+  const q = quoteFor(market, company.ticker);
+  const method = methodLine(company.model, scenario);
+  return (
+    <div className="card gpu-strip">
+      <Link href={href} className="gpu-strip-main">
+        <i className="dot" style={{ background: companyVar(company.ticker), width: 10, height: 10 }} />
+        <div>
+          <span className="eyebrow">GPU cloud, valued separately</span>
+          <b>{company.ticker}</b> <span className="muted">{px(q?.price ?? null)}</span>
+        </div>
+        <div>
+          <span className="eyebrow">Implied today</span>
+          <b title={value.price != null && value.price <= 0 ? UNDER_ZERO : undefined}>{implied(value.price)}</b>{" "}
+          {value.price != null && value.price > 0 ? <Delta value={(value.upside ?? 0) * 100} digits={0} /> : null}
+        </div>
+        <div className="gpu-strip-method">
+          <span className="eyebrow">Valued on</span>
+          <span>{method.label}, {mw(row.signed)} signed</span>
+        </div>
+      </Link>
+      <button type="button" className="btn" onClick={onInclude}>Add to the overview</button>
+    </div>
+  );
+}
+

@@ -39,7 +39,7 @@ npm run dev        # http://localhost:3000
 
 **The ledger is read by a person.** `data/ledger.ts` holds every company, campus, phase, ramp, contract, build cost and financing line, each tied to a source with a date. `lib/edgar.ts` checks SEC EDGAR for filings newer than each company's `reviewedAt` date and flags them on the company page. Numbers only change when someone reads the filing and edits the ledger.
 
-**The model is yours.** `lib/forecast.ts` turns ramps into monthly capacity, revenue, NOI, depreciation, interest and earnings, then values the run-rate in the target year and discounts it back to today. `lib/scenario.ts` holds the assumptions, the Bear, Base and Bull presets, and the URL encoding.
+**The model is yours.** `lib/forecast.ts` turns ramps into monthly capacity, revenue, NOI, depreciation, interest and earnings, then values it. Landlords default to a lease DCF: every month of rent to 2050, less build cost as it is spent, with each site sold at an exit cap rate. IREN has its own compute DCF, where each batch of GPUs earns its contract, re-lets at a lower price, and is replaced at the end of its life. Cap-rate, earnings and EBITDA methods sit alongside. `lib/calendar.ts` builds the go-live calendar from the same ramps. `lib/scenario.ts` holds the assumptions, the Bear, Base and Bull presets, and the URL encoding.
 
 ## Updating the ledger
 
@@ -68,7 +68,7 @@ To set up a fork: in **Settings › Pages**, set the source to **GitHub Actions*
 
 ## Design
 
-- **Palette.** Company colors use a fixed categorical palette. The eight slots were checked for colorblind separation in both themes, and the first three go to IREN, WULF and GLXY. Riot and CleanSpark share a neutral gray, always labeled with their tickers. Capacity tiers use a single-hue ordinal blue ramp, so "how firm" reads light to dark. See `lib/palette.ts` and the tokens in `app/globals.css`.
+- **Palette.** Company colors use a fixed categorical palette. The eight slots were checked for colorblind separation in both themes, and the first three go to IREN, WULF and GLXY. Gray is for power with no signed AI lease (MARA) and for CleanSpark, the smallest signed book, always labeled with their tickers. Capacity tiers use a single-hue ordinal blue ramp, so "how firm" reads light to dark. See `lib/palette.ts` and the tokens in `app/globals.css`.
 - **No dual axes.** Price, capacity and revenue each get their own pane on a shared timeline, with one crosshair across all three.
 - **Light and dark** follow the system setting, with a toggle in the top bar.
 - **Mobile.** The scenario panel turns into a bottom bar that opens as a sheet.
