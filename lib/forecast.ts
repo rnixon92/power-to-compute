@@ -465,6 +465,8 @@ export interface Dcf {
   operating: number;
   /** The part of operating that comes from renewals after the signed terms. */
   renewal: number;
+  /** With no renewals: buildings sold at book value as their leases end, discounted. */
+  resale: number;
   /** Tax saved because interest on the company's debt is deductible, discounted. */
   shield: number;
   /** Build cost in the month it is spent, discounted. */
@@ -490,6 +492,8 @@ export interface LeaseFlows {
   endNoi: number;
   /** GPU cloud only: cash a year after tax and GPU refills in 2050, held flat from then on. */
   endFree?: number;
+  /** With no renewals: each building sold at book value when its lease ends, after tax. */
+  resale: number[];
 }
 
 export function leaseFlows(company: Company, list: Block[], s: Scenario): LeaseFlows {
@@ -500,7 +504,15 @@ export function leaseFlows(company: Company, list: Block[], s: Scenario): LeaseF
   const renewal: number[] = [];
   const capex: number[] = [];
   const shield: number[] = [];
+  const resale: number[] = [];
   const interest = company.balance?.interest ?? 0;
+  const gpu = company.model === "gpu-cloud";
+  // The equipment share of a landlord's build is written off for tax when spent. The rest depreciates as on the books.
+  const writeOff = gpu ? 0 : s.taxWriteOff;
+  // Only spend from today gets the write-off. Buildings already paid for keep depreciating as they are.
+  const ahead = new Map(on.map((b) => [b, 1 - spentShare(b, now)]));
+  const taxOperating = taxLedger(s.tax);
+  const taxWithInterest = taxLedger(s.tax);
   // With no renewals, the business winds down once its last signed term ends, and its overhead stops with it.
   const leases = on.filter((b) => b.leaseYears);
   const windDown = !s.renew && leases.length && company.model !== "gpu-cloud" ? Math.max(...leases.map((b) => b.start + b.leaseYears * YEAR)) : Infinity;
@@ -508,24 +520,53 @@ export function leaseFlows(company: Company, list: Block[], s: Scenario): LeaseF
     const t2 = nextMonth(t);
     const p = pointAt(list, s, t);
     const ai = t >= windDown ? { ...aiValueAt(company, p, s), noi: 0 } : aiValueAt(company, p, s);
-    const taxable = ai.noi - p.da;
-    const tax = Math.max(0, taxable) * s.tax;
-    // Interest runs off as project debt amortizes. Only the tax actually avoided counts, so a loss year saves nothing.
-    const owed = interest * Math.max(0, 1 - (t - now) / YEAR / DEBT_RUNOFF_YEARS);
+    const spend = on.reduce((a, b) => a + b.weight * (b.capex * (spentShare(b, t2) - spentShare(b, t)) + refillSpend(b, s, t, t2) + refitSpend(b, s, t, t2)), 0);
+    // Monthly amounts from here. Losses carry forward, so a build year's write-off shelters later rent.
+    const writtenOff = writeOff ? on.reduce((a, b) => a + (b.gpu ? 0 : ((b.weight * b.capex) / b.life) * online(b, t) * writeOff * (ahead.get(b) ?? 0)), 0) : 0;
+    const taxable = (ai.noi - p.da + writtenOff) / 12 - spend * writeOff;
+    // Interest runs off as project debt amortizes.
+    const owed = (interest * Math.max(0, 1 - (t - now) / YEAR / DEBT_RUNOFF_YEARS)) / 12;
+    const tax = taxOperating(taxable);
+    const cash = ai.noi / 12 - tax;
     years.push((t - now) / YEAR);
-    operating.push((ai.noi - tax) / 12);
+    operating.push(cash);
     // Overhead and tax fall on renewal years in proportion to the NOI they bring.
-    renewal.push(p.noi > 0 ? ((ai.noi - tax) / 12) * (p.renewalNoi / p.noi) : 0);
-    shield.push((tax - Math.max(0, taxable - owed) * s.tax) / 12);
-    capex.push(on.reduce((a, b) => a + b.weight * (b.capex * (spentShare(b, t2) - spentShare(b, t)) + refillSpend(b, s, t, t2) + refitSpend(b, s, t, t2)), 0));
+    renewal.push(p.noi > 0 ? cash * (p.renewalNoi / p.noi) : 0);
+    shield.push(tax - taxWithInterest(taxable - owed));
+    capex.push(spend);
+    // With no renewals, each building is sold at its book value when its lease ends. Tax falls on what was written off early.
+    resale.push(s.renew || gpu ? 0 : on.reduce((a, b) => {
+      if (!b.leaseYears) return a;
+      const at = b.start + b.leaseYears * YEAR;
+      if (at < t || at >= t2) return a;
+      const book = b.weight * online(b, at) * b.capex * Math.max(0, 1 - b.leaseYears / s.shellLife);
+      return a + book * (1 - s.tax * writeOff);
+    }, 0));
   }
   const end = pointAt(list, s, DCF_END);
   const endNoi = DCF_END >= windDown ? 0 : aiValueAt(company, end, s).noi;
-  if (company.model !== "gpu-cloud") return { years, operating, renewal, capex, shield, endNoi };
+  if (company.model !== "gpu-cloud") return { years, operating, renewal, capex, shield, resale, endNoi };
   // GPU halls never stabilize the way a lease does: they keep buying GPUs. The exit is that steady cash, held flat.
   const refills = s.gpuRefresh ? on.reduce((a, b) => a + (b.gpu ? (b.weight * b.itMw * s.gpuCost * 1e6) / s.gpuLife : 0), 0) : 0;
   const endFree = endNoi - Math.max(0, endNoi - end.da) * s.tax - refills;
-  return { years, operating, renewal, capex, shield, endNoi, endFree };
+  return { years, operating, renewal, capex, shield, resale, endNoi, endFree };
+}
+
+/**
+ * Monthly tax with losses carried forward. A loss month adds to the pool, and later profits use it, up to 80% of
+ * each month's taxable income, as US rules allow for losses since 2018.
+ */
+function taxLedger(rate: number): (taxable: number) => number {
+  let pool = 0;
+  return (taxable) => {
+    if (taxable <= 0) {
+      pool -= taxable;
+      return 0;
+    }
+    const use = Math.min(pool, 0.8 * taxable);
+    pool -= use;
+    return (taxable - use) * rate;
+  };
 }
 
 /** Refit cost at each renewal that falls between t and t2, for sites that are online and renewing. */
@@ -540,18 +581,20 @@ function refitSpend(b: Block, s: Scenario, t: number, t2: number): number {
 export function discountFlows(f: LeaseFlows, r: number, exitCap: number): Dcf {
   let operating = 0;
   let renewal = 0;
+  let resale = 0;
   let capex = 0;
   let shield = 0;
   for (let i = 0; i < f.years.length; i++) {
     const df = Math.pow(1 + r, f.years[i]);
     operating += f.operating[i] / df;
     renewal += f.renewal[i] / df;
+    resale += f.resale[i] / df;
     capex += f.capex[i] / df;
     shield += f.shield[i] / df;
   }
   const exit = f.endFree != null ? Math.max(0, f.endFree) / r : f.endNoi / exitCap;
   const terminal = exit / Math.pow(1 + r, (DCF_END - Date.parse(TODAY)) / YEAR);
-  return { operating, renewal, shield, capex, terminal };
+  return { operating, renewal, resale, shield, capex, terminal };
 }
 
 /** Cash flows of the switched-on leases over their life, discounted at rate r. */
@@ -610,7 +653,7 @@ function dcfValuation(company: Company, list: Block[], s: Scenario, ctx: Ctx, r:
   const full = bridge(company, list, ctx, DCF_END);
   const lines = full.lines.filter((l) => l.label !== "Build cost still to spend");
   const br: Bridge = { lines, net: lines.reduce((a, l) => a + l.value, 0), remaining: 0 };
-  const aiToday = dcf.operating + dcf.shield - dcf.capex + dcf.terminal;
+  const aiToday = dcf.operating + dcf.shield - dcf.capex + dcf.terminal + dcf.resale;
   const equity = aiToday + ai.otherValue + br.net;
   const shares = ctx.quote?.shares ? sharesAt(ctx.quote.shares, Date.parse(targetDate), s) : null;
   const price = shares ? equity / shares : null;

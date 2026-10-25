@@ -19,6 +19,8 @@ export interface Scenario {
   renewRent: number;
   /** Refit cost at each renewal, $M per IT MW, for cooling and electrical gear that has worn out. */
   refitCost: number;
+  /** Share of a landlord's build cost written off for tax when it is spent: the equipment that qualifies for bonus depreciation. */
+  taxWriteOff: number;
   /** Value the run-rate at the end of this year. */
   year: number;
   discount: number;
@@ -94,6 +96,7 @@ export const defaultScenario: Scenario = {
   renew: true,
   renewRent: 1,
   refitCost: 0,
+  taxWriteOff: 0,
   year: 2030,
   discount: 0.1,
   leaseRate: 125,
@@ -218,7 +221,7 @@ export function methodLine(model: ModelKind, s: Scenario): { label: string; deta
   }
   if (basis === "dcf") {
     const after = !s.renew
-      ? "stopping when each signed term ends."
+      ? "stopping when each signed term ends, with each building sold at book value then."
       : `${s.renewRent === 1 ? "renewing on the same escalating rent" : `renewing at ${pctOf(s.renewRent)} of the last rent`}${s.refitCost ? ` with a $${s.refitCost}M/MW refit` : ""}, and sites sold at a ${pctOf(s.exitCap)} cap rate in 2050.`;
     return { label: `Lease DCF at ${pctOf(s.dcfRate)}${s.renew ? "" : ", signed terms"}`, detail: `Rent over each lease, discounted at ${pctOf(s.dcfRate)}, ${after}` };
   }
@@ -268,6 +271,7 @@ const numParams: { key: NumKey; q: string; scale: number; min: number; max: numb
   { key: "gpuReturn", q: "gdr", scale: 100, min: 4, max: 25 },
   { key: "renewRent", q: "rr", scale: 100, min: 0, max: 150 },
   { key: "refitCost", q: "rf", scale: 1, min: 0, max: 20 },
+  { key: "taxWriteOff", q: "two", scale: 100, min: 0, max: 100 },
   { key: "gpuTerm", q: "gt", scale: 1, min: 1, max: 10 },
   { key: "gpuRelet", q: "grl", scale: 100, min: 0, max: 100 },
 ];

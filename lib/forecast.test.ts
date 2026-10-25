@@ -276,6 +276,7 @@ describe("lease renewals", () => {
     const v = priceOf(off);
     expect(v.dcf!.renewal).toBe(0);
     expect(v.dcf!.terminal).toBe(0);
+    expect(v.dcf!.resale).toBeGreaterThan(0);
     expect(v.price!).toBeLessThan(priceOf(s).price!);
     const cb4 = blocks(wulf, off).find((b) => b.ramp.id === "wulf-cb4")!;
     expect(pointAt([cb4], off, cb4.start + 11 * 365.25 * 86_400_000).noi).toBe(0);
@@ -289,6 +290,21 @@ describe("lease renewals", () => {
     const after = rentScale(cb4, cb4.start + 10.01 * year);
     expect(after / before).toBeCloseTo(0.8, 2);
     expect(rentScale(cb4, cb4.start + 11.01 * year) / after).toBeCloseTo(1 + cb4.escalator, 2);
+  });
+
+  it("sells each building at its book value when its lease ends", () => {
+    const off = { ...s, renew: false };
+    const cb4 = blocks(wulf, off).find((b) => b.ramp.id === "wulf-cb4")!;
+    const f = leaseFlows(wulf, [cb4], off);
+    const sold = f.resale.reduce((a, x) => a + x, 0);
+    expect(sold).toBeCloseTo(cb4.capex * (1 - 10 / off.shellLife), -3);
+  });
+
+  it("writes off part of the build still to come for tax, and carries losses forward", () => {
+    const hut = companyByTicker("HUT")!;
+    const at = (sc: Scenario) => valuation(hut, blocks(hut, sc), sc, ctx).price!;
+    expect(at({ ...s, taxWriteOff: 0.3 })).toBeGreaterThan(at(s));
+    expect(at({ ...s, tax: 0 })).toBeGreaterThan(at({ ...s, taxWriteOff: 0.6 }));
   });
 
   it("charges the refit cost at each renewal", () => {

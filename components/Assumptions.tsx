@@ -103,7 +103,7 @@ export function Assumptions({ btc }: { btc: { price: number; asOf: string } | nu
               <div style={{ display: "grid", gap: 8 }}>
                 <div className="slider-top"><span>When a lease ends</span></div>
                 <Segmented label="When a lease ends" size="sm" value={s.renew ? "renew" : "stop"} onChange={(v) => set({ renew: v === "renew" })} options={[{ value: "renew", label: "Tenant renews" }, { value: "stop", label: "Signed terms only" }]} />
-                <small className="note">{s.renew ? "Rent carries on past each signed term to 2050, then the site is sold at the exit cap rate. Most of these leases carry renewal options." : "Rent stops when each signed term ends, overhead stops when the last one does, and nothing is sold in 2050. The floor: what the signed contracts alone pay for."}</small>
+                <small className="note">{s.renew ? "Rent carries on past each signed term to 2050, then the site is sold at the exit cap rate. Most of these leases carry renewal options." : "Rent stops when each signed term ends, overhead stops when the last one does, and each building is sold at its book value as its lease ends. The floor: what the signed contracts pay for, plus what is left of the buildings."}</small>
               </div>
               {s.renew ? (
                 <>
@@ -180,6 +180,7 @@ export function Assumptions({ btc }: { btc: { price: number; asOf: string } | nu
           <Slider label="Debt share of build" value={s.leverage} min={0} max={0.9} step={0.05} format={pct} onChange={(v) => set({ leverage: v })} />
           <Slider label="Interest rate" value={s.interest} min={0.03} max={0.14} step={0.0025} format={(v) => rate(v)} onChange={(v) => set({ interest: v })} />
           <Slider label="Tax rate" value={s.tax} min={0} max={0.3} step={0.01} format={pct} onChange={(v) => set({ tax: v })} />
+          <Slider label="Build cost written off for tax up front" value={s.taxWriteOff} min={0} max={0.6} step={0.05} format={pct} hint="Cooling, power and electrical gear qualifies for 100% bonus depreciation. Studies put it at 20–40% of a data center's cost. The building itself depreciates. Losses carry forward either way." onChange={(v) => set({ taxWriteOff: v })} />
           <Slider label="Share dilution per year" value={s.dilution} min={0} max={0.2} step={0.01} format={pct} onChange={(v) => set({ dilution: v })} />
           <Slider label="IT MW per gross MW" value={s.conversion} min={0.5} max={0.9} step={0.01} format={(v) => v.toFixed(2)} hint="Helios, River Bend and Beacon Point sit at 0.67–0.74." onChange={(v) => set({ conversion: v })} />
         </Section>
