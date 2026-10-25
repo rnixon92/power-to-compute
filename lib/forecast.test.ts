@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { book, companies, companyByTicker } from "@/data/ledger";
-import { aiValueAt, averageFactor, blocks, gpuAt, impliedReturn, leaseFlows, refillSpend, rentScale, disclosedLeaseRate, marketMultiple, pointAt, priceByYear, signedMw, spentShare, sumTiers, TODAY, upside, valuation, yearTable, type Ctx } from "@/lib/forecast";
+import { aiValueAt, averageFactor, blocks, gpuAt, impliedReturn, leaseFlows, refillSpend, rentScale, disclosedLeaseRate, marketMultiple, pointAt, priceByYear, signedMw, spentShare, sumTiers, taxRateOf, TODAY, upside, valuation, yearTable, type Ctx } from "@/lib/forecast";
 import { reaction } from "@/lib/events";
 import { decodeScenario, defaultScenario, encodeScenario, presets, type Scenario } from "@/lib/scenario";
 
@@ -246,8 +246,8 @@ describe("lease DCF", () => {
     const v = valuation(hut, blocks(hut, s), s, ctx);
     expect(v.dcf!.shield).toBeGreaterThan(0);
     // Never more than tax on the full interest bill, run off over 15 years and undiscounted.
-    expect(v.dcf!.shield).toBeLessThan(hut.balance!.interest! * s.tax * 15);
-    const noTax = { ...s, tax: 0 };
+    expect(v.dcf!.shield).toBeLessThan(hut.balance!.interest! * taxRateOf(hut, blocks(hut, s), s) * 15);
+    const noTax = { ...s, tax: 0, stateTax: false };
     expect(valuation(hut, blocks(hut, noTax), noTax, ctx).dcf!.shield).toBe(0);
   });
 
@@ -298,7 +298,9 @@ describe("lease renewals", () => {
     const f = leaseFlows(wulf, [cb4], off);
     const sold = f.resale.reduce((a, x) => a + x, 0);
     const ahead = 1 - spentShare(cb4, Date.parse(TODAY));
-    expect(sold).toBeCloseTo(cb4.capex * (1 - 10 / off.shellLife) * (1 - off.tax * off.taxWriteOff * ahead), -3);
+    const book = cb4.capex * (1 - 10 / off.shellLife);
+    const basis = cb4.capex * (1 - off.taxWriteOff * ahead) * (1 - 10 / off.taxLife);
+    expect(sold).toBeCloseTo(book - taxRateOf(wulf, [cb4], off) * (book - basis), -3);
   });
 
   it("writes off part of the build still to come for tax, and carries losses forward", () => {
@@ -314,6 +316,13 @@ describe("lease renewals", () => {
     const b = valuation(without, blocks(without, s), s, ctx).price!;
     expect(a).toBeGreaterThan(b);
     expect((a - b) * valuation(wulf, blocks(wulf, s), s, ctx).shares!).toBeLessThan(wulf.balance!.taxLosses!.value);
+  });
+
+  it("adds state tax by where the sites are, deductible federally", () => {
+    const rateOf = (t: string) => taxRateOf(companyByTicker(t)!, blocks(companyByTicker(t)!, s), s);
+    expect(rateOf("GLXY")).toBeCloseTo(0.21 + 0.0075 * 0.79, 6);
+    expect(rateOf("WULF")).toBeGreaterThan(rateOf("GLXY"));
+    expect(taxRateOf(companyByTicker("WULF")!, [], { ...s, stateTax: false })).toBe(s.tax);
   });
 
   it("charges the refit cost at each renewal", () => {

@@ -179,8 +179,14 @@ export function Assumptions({ btc }: { btc: { price: number; asOf: string } | nu
           <p className="note">The build debt, tax and share count behind the earnings figures.</p>
           <Slider label="Debt share of build" value={s.leverage} min={0} max={0.9} step={0.05} format={pct} onChange={(v) => set({ leverage: v })} />
           <Slider label="Interest rate" value={s.interest} min={0.03} max={0.14} step={0.0025} format={(v) => rate(v)} onChange={(v) => set({ interest: v })} />
-          <Slider label="Tax rate" value={s.tax} min={0} max={0.3} step={0.01} format={pct} onChange={(v) => set({ tax: v })} />
-          <Slider label="Build cost written off for tax up front" value={s.taxWriteOff} min={0} max={0.6} step={0.05} format={pct} hint="Cooling, power and electrical gear qualifies for 100% bonus depreciation. Cost studies put it at 20–40% of a data center, so the default is 30%. The building itself depreciates. Losses carry forward, and each company's existing tax losses from its 10-K count too." onChange={(v) => set({ taxWriteOff: v })} />
+          <Slider label="Federal tax rate" value={s.tax} min={0} max={0.3} step={0.01} format={pct} onChange={(v) => set({ tax: v })} />
+          <div style={{ display: "grid", gap: 8 }}>
+            <div className="slider-top"><span>State tax</span></div>
+            <Segmented label="State tax" size="sm" value={s.stateTax ? "on" : "off"} onChange={(v) => set({ stateTax: v === "on" })} options={[{ value: "on", label: "By where the sites are" }, { value: "off", label: "Federal only" }]} />
+            <small className="note">2026 top rates from the Tax Foundation, weighted by each company&apos;s megawatts and deductible federally. Texas has no income tax, so its 0.75% margin tax stands in. New York is 7.25%, Louisiana 5.5%, Georgia 5.19%, Kentucky 5%, North Dakota 4.31%.</small>
+          </div>
+          <Slider label="Building tax life" value={s.taxLife} min={15} max={40} format={(v) => `${v} years`} hint="US law depreciates nonresidential buildings over 39 years. The books use the building life above." onChange={(v) => set({ taxLife: v })} />
+          <Slider label="Build cost written off for tax up front" value={s.taxWriteOff} min={0} max={0.6} step={0.05} format={pct} hint="Cooling, power and electrical gear qualifies for 100% bonus depreciation. Cost studies put it at 20–40% of a data center, so the default is 30%. GPUs qualify in full and are written off when bought. Losses carry forward, and each company's existing tax losses from its 10-K count too." onChange={(v) => set({ taxWriteOff: v })} />
           <Slider label="Share dilution per year" value={s.dilution} min={0} max={0.2} step={0.01} format={pct} onChange={(v) => set({ dilution: v })} />
           <Slider label="IT MW per gross MW" value={s.conversion} min={0.5} max={0.9} step={0.01} format={(v) => v.toFixed(2)} hint="Helios, River Bend and Beacon Point sit at 0.67–0.74." onChange={(v) => set({ conversion: v })} />
         </Section>

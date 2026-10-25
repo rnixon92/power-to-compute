@@ -178,6 +178,10 @@ export interface GpuState {
   revenue: number;
   noi: number;
   da: number;
+  /** The parts of da: the hall, the first batch of GPUs, and GPUs bought to refill halls. */
+  shellDa: number;
+  firstDa: number;
+  refillDa: number;
 }
 
 /**
@@ -187,7 +191,7 @@ export interface GpuState {
  */
 export function gpuAt(b: Block, s: Scenario, t: number): GpuState {
   const g = b.gpu!;
-  const out: GpuState = { mw: 0, revenue: 0, noi: 0, da: 0 };
+  const out: GpuState = { mw: 0, revenue: 0, noi: 0, da: 0, shellDa: 0, firstDa: 0, refillDa: 0 };
   const newPrice = s.gpuRate * 1e6;
   const newCost = newPrice * (1 - s.gpuMargin);
   const shellDa = g.shellCapex / b.itMw / s.shellLife;
@@ -198,6 +202,7 @@ export function gpuAt(b: Block, s: Scenario, t: number): GpuState {
     const age = Math.max(0, (t - x.from - x.span / 2) / YEAR);
     const cycle = Math.floor(age / s.gpuLife);
     out.da += m * shellDa;
+    out.shellDa += m * shellDa;
     if (cycle > 0 && !s.gpuRefresh) continue;
     const first = cycle === 0;
     const price = first ? g.price : newPrice;
@@ -206,7 +211,10 @@ export function gpuAt(b: Block, s: Scenario, t: number): GpuState {
     out.mw += m;
     out.revenue += m * earned;
     out.noi += m * Math.max(0, earned - cost);
-    out.da += (m * (first ? g.gpuCapex / b.itMw : s.gpuCost * 1e6)) / s.gpuLife;
+    const gpuDa = (m * (first ? g.gpuCapex / b.itMw : s.gpuCost * 1e6)) / s.gpuLife;
+    out.da += gpuDa;
+    if (first) out.firstDa += gpuDa;
+    else out.refillDa += gpuDa;
   }
   return out;
 }
@@ -507,25 +515,43 @@ export function leaseFlows(company: Company, list: Block[], s: Scenario): LeaseF
   const resale: number[] = [];
   const interest = company.balance?.interest ?? 0;
   const gpu = company.model === "gpu-cloud";
-  // The equipment share of a landlord's build is written off for tax when spent. The rest depreciates as on the books.
-  const writeOff = gpu ? 0 : s.taxWriteOff;
-  // Only spend from today gets the write-off. Buildings already paid for keep depreciating as they are.
+  const rate = taxRateOf(company, list, s);
+  // The equipment share of a building is written off for tax when spent, and the rest depreciates over the tax life.
+  // GPUs qualify for bonus depreciation in full, so GPUs bought from today are written off when bought.
+  const writeOff = s.taxWriteOff;
+  // Spend from today gets the write-off. What is already built depreciates for tax as it stands.
   const ahead = new Map(on.map((b) => [b, 1 - spentShare(b, now)]));
-  // Galaxy is valued from book equity, which already carries this asset, so it is not counted twice.
-  const credit = company.balance?.bookEquity != null ? 0 : company.balance?.taxLosses?.value ?? 0;
-  const taxOperating = taxLedger(s.tax, credit);
-  const taxWithInterest = taxLedger(s.tax, credit);
+  // Past losses, net of any tax deductions on property already taken early or still to come.
+  // Galaxy is valued from book equity, which already carries these, so they are not counted twice.
+  const losses = company.balance?.taxLosses;
+  const credit = company.balance?.bookEquity != null || !losses ? 0 : Math.max(0, losses.value + losses.property);
+  const taxOperating = taxLedger(rate, credit);
+  const taxWithInterest = taxLedger(rate, credit);
   // With no renewals, the business winds down once its last signed term ends, and its overhead stops with it.
   const leases = on.filter((b) => b.leaseYears);
-  const windDown = !s.renew && leases.length && company.model !== "gpu-cloud" ? Math.max(...leases.map((b) => b.start + b.leaseYears * YEAR)) : Infinity;
+  const windDown = !s.renew && leases.length && !gpu ? Math.max(...leases.map((b) => b.start + b.leaseYears * YEAR)) : Infinity;
   for (let t = now; t < DCF_END; t = nextMonth(t)) {
     const t2 = nextMonth(t);
     const p = pointAt(list, s, t);
     const ai = t >= windDown ? { ...aiValueAt(company, p, s), noi: 0 } : aiValueAt(company, p, s);
-    const spend = on.reduce((a, b) => a + b.weight * (b.capex * (spentShare(b, t2) - spentShare(b, t)) + refillSpend(b, s, t, t2) + refitSpend(b, s, t, t2)), 0);
+    let spend = 0;
+    // Tax depreciation a year, and amounts written off this month.
+    let taxDa = 0;
+    let writtenOff = 0;
+    for (const b of on) {
+      const built = b.capex * (spentShare(b, t2) - spentShare(b, t));
+      const refill = refillSpend(b, s, t, t2);
+      const refit = refitSpend(b, s, t, t2);
+      spend += b.weight * (built + refill + refit);
+      const f = ahead.get(b) ?? 0;
+      const shell = b.gpu ? b.gpu.shellCapex : b.capex;
+      taxDa += shellTaxDa(b, s, writeOff * f, t);
+      const shellShare = b.capex ? shell / b.capex : 1;
+      writtenOff += b.weight * (built * shellShare * writeOff + built * (1 - shellShare) + refill + refit);
+      if (b.gpu) taxDa += b.weight * gpuAt(b, s, t).firstDa * (1 - f);
+    }
     // Monthly amounts from here. Losses carry forward, so a build year's write-off shelters later rent.
-    const writtenOff = writeOff ? on.reduce((a, b) => a + (b.gpu ? 0 : ((b.weight * b.capex) / b.life) * online(b, t) * writeOff * (ahead.get(b) ?? 0)), 0) : 0;
-    const taxable = (ai.noi - p.da + writtenOff) / 12 - spend * writeOff;
+    const taxable = (ai.noi - taxDa) / 12 - writtenOff;
     // Interest runs off as project debt amortizes.
     const owed = (interest * Math.max(0, 1 - (t - now) / YEAR / DEBT_RUNOFF_YEARS)) / 12;
     const tax = taxOperating(taxable);
@@ -536,13 +562,15 @@ export function leaseFlows(company: Company, list: Block[], s: Scenario): LeaseF
     renewal.push(p.noi > 0 ? cash * (p.renewalNoi / p.noi) : 0);
     shield.push(tax - taxWithInterest(taxable - owed));
     capex.push(spend);
-    // With no renewals, each building is sold at its book value when its lease ends. Tax falls on what was written off early.
+    // With no renewals, each building is sold at its book value when its lease ends. Tax falls on the gain over its tax basis.
     resale.push(s.renew || gpu ? 0 : on.reduce((a, b) => {
       if (!b.leaseYears) return a;
       const at = b.start + b.leaseYears * YEAR;
       if (at < t || at >= t2) return a;
-      const book = b.weight * online(b, at) * b.capex * Math.max(0, 1 - b.leaseYears / s.shellLife);
-      return a + book * (1 - s.tax * writeOff * (ahead.get(b) ?? 0));
+      const live = b.weight * online(b, at) * b.capex;
+      const book = live * Math.max(0, 1 - b.leaseYears / s.shellLife);
+      const basis = live * (1 - writeOff * (ahead.get(b) ?? 0)) * Math.max(0, 1 - b.leaseYears / s.taxLife);
+      return a + book - rate * (book - basis);
     }, 0));
   }
   const end = pointAt(list, s, DCF_END);
@@ -550,8 +578,42 @@ export function leaseFlows(company: Company, list: Block[], s: Scenario): LeaseF
   if (company.model !== "gpu-cloud") return { years, operating, renewal, capex, shield, resale, endNoi };
   // GPU halls never stabilize the way a lease does: they keep buying GPUs. The exit is that steady cash, held flat.
   const refills = s.gpuRefresh ? on.reduce((a, b) => a + (b.gpu ? (b.weight * b.itMw * s.gpuCost * 1e6) / s.gpuLife : 0), 0) : 0;
-  const endFree = endNoi - Math.max(0, endNoi - end.da) * s.tax - refills;
+  // Refilled GPUs are written off when bought. Halls keep depreciating for tax until their tax life runs out.
+  const hallDa = on.reduce((a, b) => a + shellTaxDa(b, s, writeOff * (ahead.get(b) ?? 0), DCF_END), 0);
+  const endFree = endNoi - Math.max(0, endNoi - hallDa - refills) * rate - refills;
   return { years, operating, renewal, capex, shield, resale, endNoi, endFree };
+}
+
+/**
+ * Top state corporate income tax rates for 2026, from the Tax Foundation. Texas has no income tax, so its 0.75% margin
+ * tax stands in. Ohio taxes gross receipts. British Columbia carries the gap to Canada's 27% combined rate.
+ */
+export const STATE_TAX: Record<string, number> = { TX: 0.0075, NY: 0.0725, KY: 0.05, NC: 0.02, GA: 0.0519, OK: 0.04, AL: 0.065, ND: 0.0431, LA: 0.055, OH: 0, NE: 0.052, BC: 0.076 };
+/** Used where a company has not named the state. */
+const STATE_TAX_UNKNOWN = 0.05;
+
+function stateOf(company: Company, campusId: string): string | null {
+  const c = company.campuses.find((x) => x.id === campusId);
+  if (!c) return null;
+  if (c.state) return c.state;
+  if (/british columbia/i.test(c.place)) return "BC";
+  if (/north dakota/i.test(c.place)) return "ND";
+  return null;
+}
+
+/** Federal plus state tax on a company's switched-on sites, weighted by megawatts. State tax is deductible federally. */
+export function taxRateOf(company: Company, list: Block[], s: Scenario): number {
+  if (!s.stateTax) return s.tax;
+  let mw = 0;
+  let sum = 0;
+  for (const b of list.filter((x) => x.enabled)) {
+    const st = stateOf(company, b.ramp.campus);
+    const rate = st != null && st in STATE_TAX ? STATE_TAX[st] : STATE_TAX_UNKNOWN;
+    mw += b.weight * b.itMw;
+    sum += b.weight * b.itMw * rate;
+  }
+  const state = mw ? sum / mw : STATE_TAX_UNKNOWN;
+  return s.tax + state * (1 - s.tax);
 }
 
 /**
@@ -574,6 +636,13 @@ function taxLedger(rate: number, credit = 0): (taxable: number) => number {
     left -= fromCredit;
     return (taxable - use) * rate - fromCredit;
   };
+}
+
+/** A year's tax depreciation on a block's building at t: straight line over the tax life once online, after any early write-off. */
+function shellTaxDa(b: Block, s: Scenario, written: number, t: number): number {
+  const shell = b.gpu ? b.gpu.shellCapex : b.capex;
+  if (!shell || t < b.start || t >= b.start + s.taxLife * YEAR) return 0;
+  return (b.weight * shell * (1 - written) * online(b, t)) / s.taxLife;
 }
 
 /** Refit cost at each renewal that falls between t and t2, for sites that are online and renewing. */

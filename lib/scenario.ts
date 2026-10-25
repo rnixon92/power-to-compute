@@ -21,6 +21,10 @@ export interface Scenario {
   refitCost: number;
   /** Share of a landlord's build cost written off for tax when it is spent: the equipment that qualifies for bonus depreciation. */
   taxWriteOff: number;
+  /** Years over which the rest of a building depreciates for tax. US law uses 39 for nonresidential property. */
+  taxLife: number;
+  /** Add state and provincial income tax where each company's sites are. */
+  stateTax: boolean;
   /** Value the run-rate at the end of this year. */
   year: number;
   discount: number;
@@ -97,6 +101,8 @@ export const defaultScenario: Scenario = {
   renewRent: 1,
   refitCost: 0,
   taxWriteOff: 0.3,
+  taxLife: 39,
+  stateTax: true,
   year: 2030,
   discount: 0.1,
   leaseRate: 125,
@@ -272,6 +278,7 @@ const numParams: { key: NumKey; q: string; scale: number; min: number; max: numb
   { key: "renewRent", q: "rr", scale: 100, min: 0, max: 150 },
   { key: "refitCost", q: "rf", scale: 1, min: 0, max: 20 },
   { key: "taxWriteOff", q: "two", scale: 100, min: 0, max: 100 },
+  { key: "taxLife", q: "tl", scale: 1, min: 5, max: 50 },
   { key: "gpuTerm", q: "gt", scale: 1, min: 1, max: 10 },
   { key: "gpuRelet", q: "grl", scale: 100, min: 0, max: 100 },
 ];
@@ -288,6 +295,7 @@ export function encodeScenario(s: Scenario): string {
   if (s.gpuMethod !== defaultScenario.gpuMethod) p.set("gv", s.gpuMethod);
   if (s.gpuRefresh !== defaultScenario.gpuRefresh) p.set("grf", s.gpuRefresh ? "1" : "0");
   if (s.renew !== defaultScenario.renew) p.set("rn", s.renew ? "1" : "0");
+  if (s.stateTax !== defaultScenario.stateTax) p.set("st", s.stateTax ? "1" : "0");
   const tiers = TIERS.filter((t) => s.tiers[t]).map((t) => tierCode[t]).join("");
   const defaultTiers = TIERS.filter((t) => defaultScenario.tiers[t]).map((t) => tierCode[t]).join("");
   if (tiers !== defaultTiers) p.set("t", tiers || "-");
@@ -308,6 +316,7 @@ export function decodeScenario(params: URLSearchParams): Scenario {
   if (params.get("sp") === "0") s.stockPay = false;
   if (params.get("grf") === "0") s.gpuRefresh = false;
   if (params.get("rn") === "0") s.renew = false;
+  if (params.get("st") === "0") s.stateTax = false;
   const gv = params.get("gv");
   if (gv === "dcf" || gv === "pe") s.gpuMethod = gv;
   const basis = params.get("b");

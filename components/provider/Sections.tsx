@@ -3,7 +3,8 @@
 import type { CapitalItem, Company } from "@/data/types";
 import type { Filing } from "@/lib/edgar";
 import filingSnapshot from "@/data/snapshots/filings.json";
-import { leaseRateOf, type Block, type Valuation, type YearRow } from "@/lib/forecast";
+import { blocks, leaseRateOf, taxRateOf, type Block, type Valuation, type YearRow } from "@/lib/forecast";
+import { useScenario } from "@/components/ScenarioProvider";
 import { tierLabel } from "@/lib/scenario";
 import { tierVar } from "@/lib/palette";
 import { isoToLabel, mw, perMw, px, quarter, usdCompact } from "@/lib/format";
@@ -199,8 +200,10 @@ export function Sources({ company }: { company: Company }) {
 }
 
 export function BalanceSheet({ company, value }: { company: Company; value: Valuation }) {
+  const { scenario } = useScenario();
   const bal = company.balance;
   if (!bal) return null;
+  const taxRate = taxRateOf(company, blocks(company, scenario), scenario);
   const src = company.sources.find((x) => x.id === bal.source);
   const ai = value.ai;
   return (
@@ -243,9 +246,9 @@ export function BalanceSheet({ company, value }: { company: Company; value: Valu
             <span className="pill" style={{ justifySelf: "start" }}>Tax</span>
             <div>
               <b style={{ fontWeight: 560 }}>Tax losses carried forward</b>
-              <p>The tax value of past losses at {isoToLabel(bal.taxLosses.asOf)}, before any valuation allowance, from the <a className="link" href={bal.taxLosses.filing} target="_blank" rel="noreferrer">10-K</a>. The lease DCF uses it against future tax, up to 80% of each year&apos;s.</p>
+              <p>The tax value of past losses at {isoToLabel(bal.taxLosses.asOf)}, before any valuation allowance, from the <a className="link" href={bal.taxLosses.filing} target="_blank" rel="noreferrer">10-K</a>{bal.taxLosses.property ? <>, {bal.taxLosses.property < 0 ? "less" : "plus"} {usdCompact(Math.abs(bal.taxLosses.property))} of deferred tax on property {bal.taxLosses.property < 0 ? "for deductions already taken early" : "for deductions still to come"}</> : null}. The DCF uses it against future tax, up to 80% of each year&apos;s, at a {(taxRate * 100).toFixed(1)}% federal and state rate on these sites.</p>
             </div>
-            <b className="tabular">{usdCompact(bal.taxLosses.value)}</b>
+            <b className="tabular">{usdCompact(Math.max(0, bal.taxLosses.value + bal.taxLosses.property))}</b>
           </div>
         ) : null}
       </div>

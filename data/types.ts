@@ -171,7 +171,13 @@ export interface Balance {
   /** The stock-based pay inside that overhead, annualized the same way. */
   stockPay: number;
   /** Tax value of loss carryforwards in the latest 10-K, before any valuation allowance. It shelters future tax, up to 80% of each year's. */
-  taxLosses?: { value: number; asOf: string; filing: string };
+  taxLosses?: {
+    value: number;
+    /** Deferred tax on property, same date: positive when tax deductions still to come exceed the books, negative when they were taken early. */
+    property: number;
+    asOf: string;
+    filing: string;
+  };
   overheadNote: string;
   /** Operations outside the AI forecast, such as bitcoin mining, as annual gross profit before overhead. */
   other?: { label: string; grossProfit: number; note: string };
