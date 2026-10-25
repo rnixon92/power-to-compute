@@ -18,8 +18,18 @@ export interface Scenario {
   discount: number;
   /** Lease rate for colo capacity without a disclosed rent, $ per kW-month. */
   leaseRate: number;
-  /** GPU cloud revenue for capacity without a contract, $M per MW-year. */
+  /** GPU cloud price on a new contract, $M per MW-year. Used for capacity without a contract and for refilled halls. */
   gpuRate: number;
+  /** How GPU cloud is valued: each GPU batch's cash over its life, or a multiple of one year's earnings. */
+  gpuMethod: "dcf" | "pe";
+  /** Compute DCF: the return you require on GPU cloud cash flows. */
+  gpuReturn: number;
+  /** Length of a new GPU cloud contract, in years. */
+  gpuTerm: number;
+  /** Price an older GPU earns once its first contract ends, as a share of that contract's price. */
+  gpuRelet: number;
+  /** Buy new GPUs for a hall when its GPUs reach the end of their life. */
+  gpuRefresh: boolean;
   coloMargin: number;
   gpuMargin: number;
   /** Shell build cost where the company has not given one, $M per IT MW. */
@@ -78,7 +88,12 @@ export const defaultScenario: Scenario = {
   year: 2030,
   discount: 0.1,
   leaseRate: 125,
-  gpuRate: 16,
+  gpuRate: 20,
+  gpuMethod: "dcf",
+  gpuReturn: 0.1,
+  gpuTerm: 3,
+  gpuRelet: 0.5,
+  gpuRefresh: true,
   coloMargin: 0.85,
   gpuMargin: 0.85,
   buildCost: 12,
@@ -87,7 +102,7 @@ export const defaultScenario: Scenario = {
   interest: 0.08,
   tax: 0.21,
   shellLife: 25,
-  gpuLife: 5,
+  gpuLife: 6,
   slip: 0,
   dilution: 0,
   conversion: 0.7,
@@ -147,15 +162,22 @@ export const presets: Record<PresetId, { label: string; blurb: string; apply: (s
   },
 };
 
-/** GPU cloud stays on earnings. A cap rate is a landlord tool. */
+/** GPU cloud has its own method: a compute DCF or earnings. A cap rate is a landlord tool. */
 export function appliedBasis(model: ModelKind, s: Scenario): Scenario["basis"] {
-  return model === "gpu-cloud" ? "pe" : s.basis;
+  return model === "gpu-cloud" ? s.gpuMethod : s.basis;
+}
+
+/** The required return a DCF discounts at: the lease rate for landlords, the compute rate for GPU cloud. */
+export function dcfRateFor(model: ModelKind, s: Scenario): number {
+  return model === "gpu-cloud" ? s.gpuReturn : s.dcfRate;
 }
 
 /** Short label for the header. The scope is which kinds of sites are on. */
-export function scenarioChip(s: Scenario): { main: string; scope: string } {
+export function scenarioChip(s: Scenario, model?: ModelKind): { main: string; scope: string } {
   const pctOf = (v: number) => `${(v * 100).toFixed(1).replace(/\.0$/, "")}%`;
-  const main = s.basis === "dcf"
+  const main = model === "gpu-cloud"
+    ? s.gpuMethod === "dcf" ? `Compute DCF ${pctOf(s.gpuReturn)}` : `${s.multiple}× · ${s.year}`
+    : s.basis === "dcf"
     ? `Lease DCF ${pctOf(s.dcfRate)}`
     : s.basis === "cap"
       ? `${pctOf(s.capRate)} cap rate`
@@ -181,7 +203,10 @@ export function scenarioChip(s: Scenario): { main: string; scope: string } {
 export function methodLine(model: ModelKind, s: Scenario): { label: string; detail: string } {
   const pctOf = (v: number) => `${(v * 100).toFixed(1).replace(/\.0$/, "")}%`;
   const basis = appliedBasis(model, s);
-  if (model === "gpu-cloud") return { label: `${s.multiple}× earnings, end ${s.year}`, detail: "GPU cloud runs on contracts of about five years, so it is valued on earnings under every method." };
+  if (model === "gpu-cloud") {
+    if (basis === "dcf") return { label: `Compute DCF at ${pctOf(s.gpuReturn)}`, detail: `Each batch of GPUs earns its contract, then ${pctOf(s.gpuRelet)} of that price until it retires after ${s.gpuLife} years.${s.gpuRefresh ? ` Halls are then refilled with new GPUs on ${s.gpuTerm}-year contracts at $${s.gpuRate}M per MW.` : " Halls stay empty after that."} Discounted at ${pctOf(s.gpuReturn)}.` };
+    return { label: `${s.multiple}× earnings, end ${s.year}`, detail: `The end-${s.year} run-rate at ${s.multiple}× earnings, discounted to today.` };
+  }
   if (basis === "dcf") return { label: `Lease DCF at ${pctOf(s.dcfRate)}`, detail: `Rent over each lease, discounted at ${pctOf(s.dcfRate)}, with sites sold at a ${pctOf(s.exitCap)} cap rate in 2050.` };
   if (basis === "cap") return { label: `${pctOf(s.capRate)} cap rate`, detail: `Each site's average NOI over its lease, capitalized at ${pctOf(s.capRate)} once fully online and discounted at ${pctOf(s.dcfRate)}.` };
   return { label: `${s.multiple}× ${basis === "pe" ? "earnings" : "EBITDA"}, end ${s.year}`, detail: `The end-${s.year} run-rate at ${s.multiple}× ${basis === "pe" ? "earnings" : "EBITDA"}, discounted to today.` };
@@ -226,6 +251,9 @@ const numParams: { key: NumKey; q: string; scale: number; min: number; max: numb
   { key: "otherMultiple", q: "om", scale: 1, min: 0, max: 15 },
   { key: "escalator", q: "esc", scale: 100, min: 0, max: 8 },
   { key: "leaseOdds", q: "lo", scale: 100, min: 0, max: 100 },
+  { key: "gpuReturn", q: "gdr", scale: 100, min: 4, max: 25 },
+  { key: "gpuTerm", q: "gt", scale: 1, min: 1, max: 10 },
+  { key: "gpuRelet", q: "grl", scale: 100, min: 0, max: 100 },
 ];
 
 const tierCode: Record<Tier, string> = { live: "l", contracted: "c", announced: "a", pipeline: "p" };
@@ -237,6 +265,8 @@ export function encodeScenario(s: Scenario): string {
   }
   if (s.basis !== defaultScenario.basis) p.set("b", s.basis);
   if (s.stockPay !== defaultScenario.stockPay) p.set("sp", s.stockPay ? "1" : "0");
+  if (s.gpuMethod !== defaultScenario.gpuMethod) p.set("gv", s.gpuMethod);
+  if (s.gpuRefresh !== defaultScenario.gpuRefresh) p.set("grf", s.gpuRefresh ? "1" : "0");
   const tiers = TIERS.filter((t) => s.tiers[t]).map((t) => tierCode[t]).join("");
   const defaultTiers = TIERS.filter((t) => defaultScenario.tiers[t]).map((t) => tierCode[t]).join("");
   if (tiers !== defaultTiers) p.set("t", tiers || "-");
@@ -255,6 +285,9 @@ export function decodeScenario(params: URLSearchParams): Scenario {
     s[key] = Math.min(max, Math.max(min, n)) / scale;
   }
   if (params.get("sp") === "0") s.stockPay = false;
+  if (params.get("grf") === "0") s.gpuRefresh = false;
+  const gv = params.get("gv");
+  if (gv === "dcf" || gv === "pe") s.gpuMethod = gv;
   const basis = params.get("b");
   if (basis === "ebitda" || basis === "cap" || basis === "dcf" || basis === "pe") s.basis = basis;
   const t = params.get("t");

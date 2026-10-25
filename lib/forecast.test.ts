@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { book, companies, companyByTicker } from "@/data/ledger";
-import { aiValueAt, averageFactor, blocks, impliedReturn, rentScale, disclosedLeaseRate, marketMultiple, pointAt, priceByYear, signedMw, spentShare, sumTiers, upside, valuation, yearTable, type Ctx } from "@/lib/forecast";
+import { aiValueAt, averageFactor, blocks, gpuAt, impliedReturn, leaseFlows, refillSpend, rentScale, disclosedLeaseRate, marketMultiple, pointAt, priceByYear, signedMw, spentShare, sumTiers, upside, valuation, yearTable, type Ctx } from "@/lib/forecast";
 import { reaction } from "@/lib/events";
 import { decodeScenario, defaultScenario, encodeScenario, presets, type Scenario } from "@/lib/scenario";
 
@@ -110,7 +110,7 @@ describe("forecast", () => {
     expect(yearEnd).toBeLessThan(3e9);
   });
 
-  it("values the AI business on earnings, EBITDA or a cap rate, and keeps IREN on earnings", () => {
+  it("values the AI business on earnings, EBITDA or a cap rate, and keeps IREN on its own method", () => {
     const hut = companyByTicker("HUT")!;
     const pe = valuation(hut, blocks(hut, run), run, ctx);
     expect(pe.ai.ev).toBeCloseTo(pe.ai.earnings * s.multiple + pe.target.debt, 0);
@@ -122,8 +122,10 @@ describe("forecast", () => {
     expect(c.nav).toBeDefined();
     expect(c.aiToday).toBeCloseTo(c.nav!.sites + c.nav!.rampCash - c.nav!.capex - c.nav!.overhead, 0);
     const iren = companyByTicker("IREN")!;
-    const i = valuation(iren, blocks(iren, cap), cap, ctx);
+    const irenPe = { ...cap, gpuMethod: "pe" as const };
+    const i = valuation(iren, blocks(iren, irenPe), irenPe, ctx);
     expect(i.ai.ev).toBeCloseTo(i.ai.earnings * cap.multiple + i.target.debt, 0);
+    expect(valuation(iren, blocks(iren, cap), cap, ctx).dcf).toBeDefined();
   });
 
   it("charges each company's overhead to the AI business", () => {
@@ -249,9 +251,53 @@ describe("lease DCF", () => {
     expect(valuation(hut, blocks(hut, noTax), noTax, ctx).dcf!.shield).toBe(0);
   });
 
-  it("keeps IREN on earnings", () => {
+  it("values IREN on its own compute DCF at its own return", () => {
     const iren = companyByTicker("IREN")!;
-    expect(valuation(iren, blocks(iren, s), s, ctx).dcf).toBeUndefined();
+    const a = valuation(iren, blocks(iren, s), s, ctx).price!;
+    const b = valuation(iren, blocks(iren, { ...s, dcfRate: 0.12 }), { ...s, dcfRate: 0.12 }, ctx).price!;
+    const c = valuation(iren, blocks(iren, { ...s, gpuReturn: 0.12 }), { ...s, gpuReturn: 0.12 }, ctx).price!;
+    expect(b).toBeCloseTo(a, 6);
+    expect(c).toBeLessThan(a);
+  });
+});
+
+describe("compute DCF", () => {
+  const iren = companyByTicker("IREN")!;
+  const h1 = () => blocks(iren, s).find((b) => b.ramp.id === "iren-live")!;
+  const at = (iso: string, sc = s) => gpuAt(blocks(iren, sc).find((b) => b.ramp.id === "iren-live")!, sc, Date.parse(iso));
+  const perMw = (iso: string, sc = s) => at(iso, sc).revenue / h1().itMw;
+
+  it("earns Microsoft's price for five years, re-lets until the GPUs retire, then refills at the new price", () => {
+    expect(perMw("2027-06-30")).toBeCloseTo(9.7e6, -3);
+    expect(perMw("2032-06-30")).toBeCloseTo(9.7e6 * s.gpuRelet, -3);
+    expect(perMw("2033-06-30")).toBeCloseTo(s.gpuRate * 1e6, -3);
+    expect(perMw("2036-12-31")).toBeCloseTo(s.gpuRate * 1e6 * s.gpuRelet, -3);
+  });
+
+  it("keeps running costs flat when the price drops, so re-let years earn less margin", () => {
+    const year6 = at("2032-06-30");
+    expect(year6.noi / year6.revenue).toBeLessThan(s.gpuMargin);
+  });
+
+  it("leaves the halls empty when refills are off, and gives no exit value", () => {
+    const off = { ...s, gpuRefresh: false };
+    expect(at("2033-06-30", off).mw).toBe(0);
+    expect(at("2033-06-30").mw).toBeCloseTo(h1().itMw, 6);
+    expect(leaseFlows(iren, blocks(iren, off), off).endFree).toBeLessThanOrEqual(0);
+  });
+
+  it("buys a hall's GPUs again once per GPU life", () => {
+    const b = h1();
+    let spend = 0;
+    for (let y = 2026; y < 2026 + s.gpuLife + 1; y++) spend += refillSpend(b, s, Date.UTC(y, 0, 1), Date.UTC(y + 1, 0, 1));
+    expect(spend).toBeCloseTo(b.itMw * s.gpuCost * 1e6, -3);
+  });
+
+  it("spreads a ramp into batches that age on their own dates", () => {
+    const b = blocks(iren, s).find((x) => x.ramp.id === "iren-2026")!;
+    const mid = gpuAt(b, s, Date.parse("2026-11-15"));
+    expect(mid.mw).toBeGreaterThan(0);
+    expect(mid.mw).toBeLessThan(b.itMw);
   });
 });
 

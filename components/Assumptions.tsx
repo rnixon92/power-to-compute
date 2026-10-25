@@ -137,14 +137,31 @@ export function Assumptions({ btc }: { btc: { price: number; asOf: string } | nu
           <p className="note">Bitcoin is valued at {btc ? `$${Math.round(btc.price).toLocaleString("en-US")}, from Coinbase when the site was built` : "the June 30 price of $58,540"}.</p>
         </Section>
 
-        <Section title="IREN, GPU cloud" summary={`${s.multiple}× earnings · end ${s.year} · $${s.gpuRate.toFixed(1)}M/MW`} open={onIren}>
-          <p className="note">IREN rents out GPUs on contracts of about five years, so it is valued on earnings at the end of a year you pick.</p>
-          <Slider label="Earnings multiple" value={s.multiple} min={6} max={40} format={(v) => `${v}×`} onChange={(v) => set({ multiple: v })} />
-          <YearPicker value={s.year} onChange={(y) => set({ year: y })} />
-          <Slider label="Revenue on uncontracted capacity" value={s.gpuRate} min={3} max={30} step={0.1} format={(v) => `$${v.toFixed(1)}M/MW·yr`} hint="IREN's recent 3-year contracts are above $20M per MW a year. $16M spreads that over a GPU's five years, with the last two re-let near the $9.7M Microsoft pays." onChange={(v) => set({ gpuRate: v })} />
-          <Slider label="Project EBITDA margin" value={s.gpuMargin} min={0.3} max={0.95} step={0.01} format={pct} hint="IREN targets 85% on the Microsoft contract." onChange={(v) => set({ gpuMargin: v })} />
-          <Slider label="GPU cost, where undisclosed" value={s.gpuCost} min={10} max={60} format={(v) => `$${v}M/MW`} hint={`IREN's ~2-year payback at $20M of revenue points to about $34M. New halls add the $${s.buildCost}M building cost, $${s.gpuCost + s.buildCost}M per MW in all. The Microsoft contract stays at its disclosed $29M of GPUs.`} onChange={(v) => set({ gpuCost: v })} />
-          <Slider label="GPU depreciation life" value={s.gpuLife} min={3} max={8} format={(v) => `${v} years`} onChange={(v) => set({ gpuLife: v })} />
+        <Section title="IREN, GPU cloud" summary={s.gpuMethod === "dcf" ? `Compute DCF ${rate(s.gpuReturn)} · $${s.gpuRate}M/MW new · ${s.gpuLife}-year GPUs` : `${s.multiple}× earnings · end ${s.year} · $${s.gpuRate}M/MW new`} open={onIren}>
+          <Segmented label="GPU cloud method" size="sm" value={s.gpuMethod} onChange={(v) => set({ gpuMethod: v })} options={[{ value: "dcf", label: "Compute DCF" }, { value: "pe", label: "Earnings" }]} />
+          {s.gpuMethod === "dcf" ? (
+            <>
+              <p className="note">Each batch of GPUs earns its contract, keeps running at a lower price once the contract ends, and retires at the end of its life. Halls come online on different dates, so GPUs are bought and retired every year.</p>
+              <Slider label="Required return" value={s.gpuReturn} min={0.06} max={0.2} step={0.0025} format={(v) => rate(v)} hint="GPU contracts are shorter and riskier than leases, so this sits above the lease return." onChange={(v) => set({ gpuReturn: v })} />
+            </>
+          ) : (
+            <>
+              <p className="note">One year&apos;s earnings at a multiple, with the same contract, re-let and refill path as the DCF.</p>
+              <Slider label="Earnings multiple" value={s.multiple} min={6} max={40} format={(v) => `${v}×`} onChange={(v) => set({ multiple: v })} />
+              <YearPicker value={s.year} onChange={(y) => set({ year: y })} />
+            </>
+          )}
+          <Slider label="Price on new contracts" value={s.gpuRate} min={3} max={30} step={0.5} format={(v) => `$${v.toFixed(1)}M/MW·yr`} hint="IREN's recent 3-year contracts are above $20M per MW a year, with talks near $25M. Used for capacity with no contract yet and for refilled halls." onChange={(v) => set({ gpuRate: v })} />
+          <Slider label="New contract length" value={s.gpuTerm} min={1} max={7} format={(v) => `${v} year${v === 1 ? "" : "s"}`} hint="Recent IREN contracts run 3 years. Microsoft's runs 5." onChange={(v) => set({ gpuTerm: v })} />
+          <Slider label="Price once the contract ends, share of it" value={s.gpuRelet} min={0} max={1} step={0.05} format={pct} hint="Older GPUs keep running at a lower price. IREN says prices for older generations have been climbing." onChange={(v) => set({ gpuRelet: v })} />
+          <Slider label="GPU useful life" value={s.gpuLife} min={3} max={10} format={(v) => `${v} years`} hint="When a batch retires. CoreWeave depreciates its GPUs over six years." onChange={(v) => set({ gpuLife: v })} />
+          <div style={{ display: "grid", gap: 8 }}>
+            <div className="slider-top"><span>When GPUs retire</span></div>
+            <Segmented label="When GPUs retire" size="sm" value={s.gpuRefresh ? "refill" : "empty"} onChange={(v) => set({ gpuRefresh: v === "refill" })} options={[{ value: "refill", label: "Buy new GPUs" }, { value: "empty", label: "Leave the hall empty" }]} />
+            <small className="note">New GPUs cost the GPU figure below and sign at the new contract price.</small>
+          </div>
+          <Slider label="Project EBITDA margin" value={s.gpuMargin} min={0.3} max={0.95} step={0.01} format={pct} hint="IREN targets 85% on the Microsoft contract. Running costs stay the same after a contract ends, so the margin narrows." onChange={(v) => set({ gpuMargin: v })} />
+          <Slider label="GPU cost, where undisclosed" value={s.gpuCost} min={10} max={60} format={(v) => `$${v}M/MW`} hint={`IREN's ~2-year payback at $20M of revenue points to about $34M. New halls add the $${s.buildCost}M building cost. The Microsoft contract stays at its disclosed $29M of GPUs.`} onChange={(v) => set({ gpuCost: v })} />
         </Section>
 
         <Section title="Financing and details" summary={`${pct(s.leverage)} debt at ${rate(s.interest)} · tax ${pct(s.tax)}`}>

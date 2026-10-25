@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { book, watchlist } from "@/data/ledger";
 import type { Company, MarketBook, Tier } from "@/data/types";
 import { backlog, blocks, ctxFor, liveMw, marketMultiple, series, signedMw, sumTiers, tierMw, TODAY, valuation, type Point, type Valuation } from "@/lib/forecast";
-import { TIERS, tierLabel } from "@/lib/scenario";
+import { appliedBasis, TIERS, tierLabel } from "@/lib/scenario";
 import { companyVar, hasSlot, tierVar } from "@/lib/palette";
 import { implied, mw, mwTick, px, UNDER_ZERO, usdCompact, usdTick } from "@/lib/format";
 import { quoteFor } from "@/lib/quotes";
@@ -84,6 +84,9 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
   const totalCap = shown.reduce((a, r) => a + (r.cap ?? 0), 0);
   const targetRevenue = shown.reduce((a, r) => a + sumTiers(r.value.target.revenue), 0);
   const openMw = shown.reduce((a, r) => a + r.tiers.announced + r.tiers.pipeline, 0);
+  const irenRate = `${(scenario.gpuReturn * 100).toFixed(1).replace(/\.0$/, "")}%`;
+  const irenLine = !showIren ? null : scenario.gpuMethod === "dcf" ? <> IREN is valued on its GPU contracts at {irenRate}.</> : <> IREN is on {scenario.multiple}× earnings.</>;
+  const irenMarket = !showIren ? null : scenario.gpuMethod === "dcf" ? ` For IREN it is the return on its GPU contracts, against your ${irenRate}.` : " IREN stays on an earnings multiple.";
   const shownCompanies = useMemo(() => shown.map((r) => r.company), [shown]);
   const soon = useMemo(() => calendar(shownCompanies, scenario).counts.slice(0, 2).reduce((a, n) => a + n, 0), [shownCompanies, scenario]);
 
@@ -224,10 +227,10 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
           <div>
             <h2>The companies</h2>
             <p>{scenario.basis === "dcf"
-              ? <>Landlords are valued on every month of rent over each lease&apos;s life, discounted at {(scenario.dcfRate * 100).toFixed(1).replace(/\.0$/, "")}%, plus the balance sheet.{showIren ? <> IREN stays on {scenario.multiple}× earnings.</> : null}</>
+              ? <>Landlords are valued on every month of rent over each lease&apos;s life, discounted at {(scenario.dcfRate * 100).toFixed(1).replace(/\.0$/, "")}%, plus the balance sheet.{irenLine}</>
               : scenario.basis === "cap"
-              ? <>Landlords are each site&apos;s average NOI over its lease at a {(scenario.capRate * 100).toFixed(1)}% cap rate, less build cost, plus the balance sheet.{showIren ? <> IREN stays on {scenario.multiple}× earnings.</> : null}</>
-              : <>Implied price is the end-{scenario.year} run-rate at {scenario.multiple}× {scenario.basis === "pe" ? "earnings" : "EBITDA"}, discounted to today.</>} Open a company for the site-by-site breakdown.</p>
+              ? <>Landlords are each site&apos;s average NOI over its lease at a {(scenario.capRate * 100).toFixed(1)}% cap rate, less build cost, plus the balance sheet.{irenLine}</>
+              : <>Implied price is the end-{scenario.year} run-rate at {scenario.multiple}× {scenario.basis === "pe" ? "earnings" : "EBITDA"}, discounted to today.{scenario.gpuMethod === "dcf" ? irenLine : null}</>} Open a company for the site-by-site breakdown.</p>
           </div>
         </div>
         <div className="grid-cards">
@@ -249,10 +252,10 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
           <div>
             <h2>Relative value</h2>
             <p>What the market pays for each signed megawatt, and what your scenario says each share is worth. {scenario.basis === "dcf"
-              ? <>The last column is the annual return today&apos;s price implies on the leases. Your scenario asks for {(scenario.dcfRate * 100).toFixed(1).replace(/\.0$/, "")}%.{showIren ? " IREN stays on an earnings multiple." : null}</>
+              ? <>The last column is the annual return today&apos;s price implies on the leases. Your scenario asks for {(scenario.dcfRate * 100).toFixed(1).replace(/\.0$/, "")}%.{irenMarket}</>
               : scenario.basis === "cap"
-              ? <>The last column is the cap rate today&apos;s price implies on stabilized NOI. Your scenario uses {(scenario.capRate * 100).toFixed(1)}%.{showIren ? " IREN stays on an earnings multiple." : null}</>
-              : <>The last column is the {scenario.basis === "pe" ? "earnings" : "EBITDA"} multiple today&apos;s price implies. Your scenario uses {scenario.multiple}×.</>}{showIren ? " IREN is a GPU cloud, so its dollars per megawatt measure compute sales and sit apart from the leases." : null}</p>
+              ? <>The last column is the cap rate today&apos;s price implies on stabilized NOI. Your scenario uses {(scenario.capRate * 100).toFixed(1)}%.{irenMarket}</>
+              : <>The last column is the {scenario.basis === "pe" ? "earnings" : "EBITDA"} multiple today&apos;s price implies. Your scenario uses {scenario.multiple}×.{scenario.gpuMethod === "dcf" ? irenMarket : null}</>}{showIren ? " IREN is a GPU cloud, so its dollars per megawatt measure compute sales and sit apart from the leases." : null}</p>
           </div>
           <Segmented label="Valuation year" value={scenario.year} onChange={(y) => set({ year: y })} options={[2026, 2027, 2028, 2029, 2030].map((y) => ({ value: y, label: String(y) }))} />
         </div>
@@ -290,7 +293,7 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
                       <td className="r">{usdCompact(sumTiers(r.value.target.revenue))}</td>
                       <td className="r"><b title={r.value.price != null && r.value.price <= 0 ? UNDER_ZERO : undefined}>{implied(r.value.price)}</b></td>
                       <td className="r">{r.value.price != null && r.value.price > 0 ? <Delta value={(r.value.upside ?? 0) * 100} digits={0} /> : <span className="muted" title="Debt, claims and build cost still to spend exceed the value in this scenario">below zero</span>}</td>
-                      <td className="r">{formatMarket(r.multiple, scenario.basis, r.company.model)}</td>
+                      <td className="r">{formatMarket(r.multiple, appliedBasis(r.company.model, scenario))}</td>
                     </tr>
                   );
                 })}
@@ -348,10 +351,10 @@ export function BoardView({ market, states, pins, mapSize }: { market: MarketBoo
   );
 }
 
-function formatMarket(multiple: number | null, basis: string, model: string): string {
+function formatMarket(multiple: number | null, basis: string): string {
   if (multiple == null) return "—";
-  if (basis === "dcf" && model !== "gpu-cloud") return `${(multiple * 100).toFixed(1)}% a year`;
-  if (basis === "cap" && model !== "gpu-cloud") return `${(multiple * 100).toFixed(1)}%`;
+  if (basis === "dcf") return `${(multiple * 100).toFixed(1)}% a year`;
+  if (basis === "cap") return `${(multiple * 100).toFixed(1)}%`;
   return `${multiple.toFixed(1)}×`;
 }
 

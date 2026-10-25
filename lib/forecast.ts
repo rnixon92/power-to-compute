@@ -1,6 +1,6 @@
 import { BTC_JUN30 } from "@/data/ledger";
 import type { Company, MarketBook, Quote, Ramp, Tier } from "@/data/types";
-import { appliedBasis, TIERS, type Scenario } from "@/lib/scenario";
+import { appliedBasis, dcfRateFor, TIERS, type Scenario } from "@/lib/scenario";
 
 /** The build date on the static site, so every page agrees. Falls back to the clock in tests and scripts. */
 export const TODAY = process.env.NEXT_PUBLIC_TODAY || new Date().toISOString().slice(0, 10);
@@ -32,6 +32,20 @@ export interface Block {
   averageFactor: number;
   /** Share of this block's money that counts: your lease odds for sites with no signed tenant, 1 otherwise. */
   weight: number;
+  /** GPU cloud only: what the first batch of GPUs earns and costs. */
+  gpu?: GpuTerms;
+}
+
+export interface GpuTerms {
+  /** GPUs bought for the first contract, and the hall built for them. */
+  gpuCapex: number;
+  shellCapex: number;
+  /** First contract, per MW-year. */
+  price: number;
+  /** Power and running costs per MW-year, which stay the same once the contract ends. */
+  cost: number;
+  /** First contract length, years. */
+  term: number;
 }
 
 /** Average of (1 + g)^k over a term of T years. A rent quoted as the term average is this many times the first year's rent. */
@@ -85,17 +99,21 @@ export function block(company: Company, ramp: Ramp, s: Scenario): Block {
   let capex: number;
   let capexFrom: Block["capexFrom"];
   let life = kind === "gpu" ? s.gpuLife : s.shellLife;
+  let gpuCapex = 0;
+  let shellCapex = 0;
   if (ramp.capexTotal != null) {
     capex = ramp.capexTotal;
     capexFrom = "company";
+    if (kind === "gpu") gpuCapex = capex;
   } else if (ramp.capexPerMw != null) {
     capex = ramp.capexPerMw * mw;
     capexFrom = "company";
+    if (kind === "gpu") gpuCapex = capex;
   } else if (kind === "gpu") {
     // IREN builds the hall and buys the GPUs. A disclosed GPU price stays as published. An undisclosed site pays for both,
     // unless the GPUs go into a hall it already has.
-    const gpuCapex = s.gpuCost * 1e6 * mw;
-    const shellCapex = ramp.retrofit ? 0 : s.buildCost * 1e6 * mw;
+    gpuCapex = s.gpuCost * 1e6 * mw;
+    shellCapex = ramp.retrofit ? 0 : s.buildCost * 1e6 * mw;
     capex = gpuCapex + shellCapex;
     life = capex / (gpuCapex / s.gpuLife + shellCapex / s.shellLife);
     capexFrom = "assumed";
@@ -128,7 +146,71 @@ export function block(company: Company, ramp: Ramp, s: Scenario): Block {
     escalatorFrom,
     averageFactor: basis === "average" ? averageFactor(escalator, ramp.termYears ?? 15) : 1,
     weight: ramp.tier === "announced" || ramp.tier === "pipeline" ? s.leaseOdds : 1,
+    gpu: gpu && kind === "gpu" && mw > 0
+      ? { gpuCapex, shellCapex, price: revenue / mw, cost: (revenue - noi) / mw, term: ramp.termYears ?? s.gpuTerm }
+      : undefined,
   };
+}
+
+const MONTH = YEAR / 12;
+
+/** A GPU block's batches: equal slices of its ramp, each going live over its own stretch of the ramp. */
+function batches(b: Block): { from: number; span: number; mw: number }[] {
+  const n = b.full > b.start ? Math.max(1, Math.round((b.full - b.start) / MONTH)) : 1;
+  const span = (b.full - b.start) / n;
+  return Array.from({ length: n }, (_, i) => ({ from: b.start + i * span, span, mw: b.itMw / n }));
+}
+
+export interface GpuState {
+  mw: number;
+  revenue: number;
+  noi: number;
+  da: number;
+}
+
+/**
+ * A GPU cloud block at time t, batch by batch. Each batch earns its first contract, then the re-let share of that
+ * price until it reaches the end of its life. Then its hall is refilled with new GPUs on a new contract, or sits empty.
+ * Running costs per MW stay the same through a batch's life, so a re-let batch earns a thinner margin.
+ */
+export function gpuAt(b: Block, s: Scenario, t: number): GpuState {
+  const g = b.gpu!;
+  const out: GpuState = { mw: 0, revenue: 0, noi: 0, da: 0 };
+  const newPrice = s.gpuRate * 1e6;
+  const newCost = newPrice * (1 - s.gpuMargin);
+  const shellDa = g.shellCapex / b.itMw / s.shellLife;
+  for (const x of batches(b)) {
+    const f = x.span > 0 ? Math.min(1, Math.max(0, (t - x.from) / x.span)) : t >= x.from ? 1 : 0;
+    if (!f) continue;
+    const m = f * x.mw;
+    const age = Math.max(0, (t - x.from - x.span / 2) / YEAR);
+    const cycle = Math.floor(age / s.gpuLife);
+    out.da += m * shellDa;
+    if (cycle > 0 && !s.gpuRefresh) continue;
+    const first = cycle === 0;
+    const price = first ? g.price : newPrice;
+    const cost = first ? g.cost : newCost;
+    const earned = age - cycle * s.gpuLife < (first ? g.term : s.gpuTerm) ? price : price * s.gpuRelet;
+    out.mw += m;
+    out.revenue += m * earned;
+    out.noi += m * Math.max(0, earned - cost);
+    out.da += (m * (first ? g.gpuCapex / b.itMw : s.gpuCost * 1e6)) / s.gpuLife;
+  }
+  return out;
+}
+
+/** New GPUs bought to refill a block's halls between t and t2. */
+export function refillSpend(b: Block, s: Scenario, t: number, t2: number): number {
+  if (!b.gpu || !s.gpuRefresh) return 0;
+  const step = s.gpuLife * YEAR;
+  let spend = 0;
+  for (const x of batches(b)) {
+    const mid = x.from + x.span / 2;
+    const k = Math.max(1, Math.ceil((t - mid) / step));
+    const at = mid + k * step;
+    if (at >= t && at < t2) spend += x.mw * s.gpuCost * 1e6;
+  }
+  return spend;
 }
 
 export function blocks(company: Company, s: Scenario): Block[] {
@@ -168,6 +250,20 @@ export function pointAt(list: Block[], s: Scenario, t: number): Point {
   let interest = 0;
   let debt = 0;
   for (const b of list) {
+    if (b.gpu) {
+      const g = gpuAt(b, s, t);
+      mwAll += g.mw;
+      revenueAll += g.revenue;
+      if (!b.enabled || !g.mw) continue;
+      mw[b.ramp.tier] += g.mw;
+      revenue[b.ramp.tier] += b.weight * g.revenue;
+      noi += b.weight * g.noi;
+      da += b.weight * g.da;
+      const d = (b.weight * b.capex * s.leverage * g.mw) / b.itMw;
+      debt += d;
+      interest += d * s.interest;
+      continue;
+    }
     const f = online(b, t);
     if (!f) continue;
     const k = rentScale(b, t);
@@ -371,6 +467,8 @@ export interface LeaseFlows {
   shield: number[];
   /** NOI after overhead in 2050, for the exit value. */
   endNoi: number;
+  /** GPU cloud only: cash a year after tax and GPU refills in 2050, held flat from then on. */
+  endFree?: number;
 }
 
 export function leaseFlows(company: Company, list: Block[], s: Scenario): LeaseFlows {
@@ -392,10 +490,15 @@ export function leaseFlows(company: Company, list: Block[], s: Scenario): LeaseF
     years.push((t - now) / YEAR);
     operating.push((ai.noi - tax) / 12);
     shield.push((tax - Math.max(0, taxable - owed) * s.tax) / 12);
-    capex.push(on.reduce((a, b) => a + b.weight * b.capex * (spentShare(b, t2) - spentShare(b, t)), 0));
+    capex.push(on.reduce((a, b) => a + b.weight * (b.capex * (spentShare(b, t2) - spentShare(b, t)) + refillSpend(b, s, t, t2)), 0));
   }
-  const endNoi = aiValueAt(company, pointAt(list, s, DCF_END), s).noi;
-  return { years, operating, capex, shield, endNoi };
+  const end = pointAt(list, s, DCF_END);
+  const endNoi = aiValueAt(company, end, s).noi;
+  if (company.model !== "gpu-cloud") return { years, operating, capex, shield, endNoi };
+  // GPU halls never stabilize the way a lease does: they keep buying GPUs. The exit is that steady cash, held flat.
+  const refills = s.gpuRefresh ? on.reduce((a, b) => a + (b.gpu ? (b.weight * b.itMw * s.gpuCost * 1e6) / s.gpuLife : 0), 0) : 0;
+  const endFree = endNoi - Math.max(0, endNoi - end.da) * s.tax - refills;
+  return { years, operating, capex, shield, endNoi, endFree };
 }
 
 export function discountFlows(f: LeaseFlows, r: number, exitCap: number): Dcf {
@@ -408,7 +511,8 @@ export function discountFlows(f: LeaseFlows, r: number, exitCap: number): Dcf {
     capex += f.capex[i] / df;
     shield += f.shield[i] / df;
   }
-  const terminal = f.endNoi / exitCap / Math.pow(1 + r, (DCF_END - Date.parse(TODAY)) / YEAR);
+  const exit = f.endFree != null ? Math.max(0, f.endFree) / r : f.endNoi / exitCap;
+  const terminal = exit / Math.pow(1 + r, (DCF_END - Date.parse(TODAY)) / YEAR);
   return { operating, shield, capex, terminal };
 }
 
@@ -442,7 +546,7 @@ export interface Valuation {
 
 export function valuation(company: Company, list: Block[], s: Scenario, ctx: Ctx): Valuation {
   const basis = appliedBasis(company.model, s);
-  if (basis === "dcf") return dcfValuation(company, list, s, ctx, s.dcfRate);
+  if (basis === "dcf") return dcfValuation(company, list, s, ctx, dcfRateFor(company.model, s));
   if (basis === "cap") return capValuation(company, list, s, ctx, s.capRate);
   const targetDate = `${s.year}-12-31`;
   const target = pointAt(list, s, Date.parse(targetDate));
@@ -550,7 +654,8 @@ export function pricePath(company: Company, list: Block[], points: Point[], s: S
   if (appliedBasis(company.model, s) === "dcf" || appliedBasis(company.model, s) === "cap") {
     // With no dividends, a value built from discounted cash grows at the return it is discounted at.
     const today = valuation(company, list, s, ctx).price ?? 0;
-    return points.filter((p) => p.t >= now).map((p) => ({ t: p.t, v: today * Math.pow(1 + s.dcfRate, (p.t - now) / YEAR) }));
+    const r = dcfRateFor(company.model, s);
+    return points.filter((p) => p.t >= now).map((p) => ({ t: p.t, v: today * Math.pow(1 + r, (p.t - now) / YEAR) }));
   }
   return points
     .filter((p) => p.t >= now)
@@ -615,7 +720,7 @@ export function yearTable(company: Company, list: Block[], s: Scenario, ctx: Ctx
       exitEarnings: endAi.earnings,
       eps: sh ? earnings / sh : null,
       value: dcfPrice != null
-        ? dcfPrice * Math.pow(1 + s.dcfRate, (end.t - Date.parse(TODAY)) / YEAR)
+        ? dcfPrice * Math.pow(1 + dcfRateFor(company.model, s), (end.t - Date.parse(TODAY)) / YEAR)
         : sh ? (endAi.ev + interimCash(company, list, s, end.t).total + endAi.otherValue + bridge(company, list, ctx, end.t).net) / sh : null,
     });
   }

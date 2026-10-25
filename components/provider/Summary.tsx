@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import type { Company } from "@/data/types";
 import { blocks, priceByYear, sumTiers, upside, valuation, type Ctx, type Valuation } from "@/lib/forecast";
-import { appliedBasis, methodLine, scenarioChip, tierLabel } from "@/lib/scenario";
+import { appliedBasis, dcfRateFor, methodLine, scenarioChip, tierLabel } from "@/lib/scenario";
 import { tierVar } from "@/lib/palette";
 import { implied, isoToLabel, mw, px, quarter, usdCompact } from "@/lib/format";
 import { useScenario } from "@/components/ScenarioProvider";
@@ -75,7 +75,7 @@ export function Summary({ company, ctx, value, multiple }: { company: Company; c
         {onMw > 0 ? (
           <p>
             {multiple != null && basis === "dcf"
-              ? <>Put another way, today&apos;s price implies these leases return <b>{(multiple * 100).toFixed(1)}%</b> a year, with the balance sheet as it is. Your scenario asks for {(s.dcfRate * 100).toFixed(1).replace(/\.0$/, "")}%.</>
+              ? <>Put another way, today&apos;s price implies {gpu ? "these GPU contracts" : "these leases"} return <b>{(multiple * 100).toFixed(1)}%</b> a year, with the balance sheet as it is. Your scenario asks for {(dcfRateFor(company.model, s) * 100).toFixed(1).replace(/\.0$/, "")}%.</>
               : multiple != null && basis === "cap"
               ? <>Put another way, today&apos;s price implies a <b>{(multiple * 100).toFixed(1)}%</b> cap rate on stabilized NOI, with the balance sheet as it is. Your scenario uses {(s.capRate * 100).toFixed(1)}%.</>
               : multiple != null
@@ -97,7 +97,7 @@ export function Summary({ company, ctx, value, multiple }: { company: Company; c
         {rows.length ? (
           <p>
             <b>Not in this price:</b> {mw(offMw)} of power with no tenant yet or held as a future option.
-            {allOn != null && allOn > 0 ? <> {gpu ? "At your GPU rate" : "Leased at your rate"}{s.leaseOdds < 1 ? ` with a ${Math.round(s.leaseOdds * 100)}% chance of signing` : ""}, all of it would add about <b>{px(allOn)}</b> a share once built{basis === "dcf" || basis === "cap" ? ", valued over each lease" : `, valued at the end of ${lastYear}`}.</> : null}
+            {allOn != null && allOn > 0 ? <> {gpu ? "At your new-contract price" : "Leased at your rate"}{s.leaseOdds < 1 ? ` with a ${Math.round(s.leaseOdds * 100)}% chance of signing` : ""}, all of it would add about <b>{px(allOn)}</b> a share once built{basis === "dcf" || basis === "cap" ? (gpu ? ", valued over each batch of GPUs" : ", valued over each lease") : `, valued at the end of ${lastYear}`}.</> : null}
           </p>
         ) : (
           <p className="muted">Every site in the ledger is switched on.</p>
@@ -155,7 +155,7 @@ export function Summary({ company, ctx, value, multiple }: { company: Company; c
             {rows.length > SHOWN ? (
               <button type="button" className="btn ghost" onClick={() => setAll(!all)}>{all ? "Show fewer" : `Show all ${rows.length}`}</button>
             ) : <span />}
-            <span className="note">{gpu ? "Each figure is per share today. Sites without a disclosed contract use your GPU rate and GPU cost." : `Each figure is per share today, at your lease rate and build cost${s.leaseOdds < 1 ? `, counted at your ${Math.round(s.leaseOdds * 100)}% chance of leasing` : ""}.`}</span>
+            <span className="note">{gpu ? `Each figure is per share today. Sites without a disclosed contract use your new-contract price and GPU cost${s.leaseOdds < 1 ? `, counted at your ${Math.round(s.leaseOdds * 100)}% chance of signing` : ""}.` : `Each figure is per share today, at your lease rate and build cost${s.leaseOdds < 1 ? `, counted at your ${Math.round(s.leaseOdds * 100)}% chance of leasing` : ""}.`}</span>
             <button type="button" className="btn" onClick={() => setRamps(rows.map((r) => r.block.ramp), true)}>Include all</button>
           </div>
         </>
@@ -178,7 +178,7 @@ export function PriceBridge({ company, value }: { company: Company; value: Valua
     <div className="card card-pad" style={{ marginTop: 14 }}>
       <div className="bridge-cols">
         <div>
-          <div className="eyebrow">{basis === "dcf" ? `The AI business, run-rate at end ${s.year} and lease value` : basis === "cap" ? "The AI business, site by site at a cap rate" : `The AI business, end ${s.year}`}</div>
+          <div className="eyebrow">{basis === "dcf" ? (gpu ? `The AI business, run-rate at end ${s.year} and GPU cash flows` : `The AI business, run-rate at end ${s.year} and lease value`) : basis === "cap" ? "The AI business, site by site at a cap rate" : `The AI business, end ${s.year}`}</div>
           <div className="bridge" style={{ marginTop: 8 }}>
             {basis !== "cap" ? (
               <>
@@ -189,10 +189,12 @@ export function PriceBridge({ company, value }: { company: Company; value: Valua
             ) : null}
             {basis === "dcf" && value.dcf ? (
               <>
-                <div title="Each month to 2050, after overhead and tax, discounted at your required return."><span>Lease cash flows to 2050</span><b>{usdCompact(value.dcf.operating)}</b></div>
+                <div title="Each month to 2050, after overhead and tax, discounted at your required return."><span>{gpu ? "Contract cash flows to 2050" : "Lease cash flows to 2050"}</span><b>{usdCompact(value.dcf.operating)}</b></div>
                 {value.dcf.shield > 0 ? <div title={company.balance?.interestNote}><span>Tax saved on interest</span><b>+{usdCompact(value.dcf.shield)}</b></div> : null}
-                <div title="Spent month by month as each campus is built."><span>Build cost as it is spent</span><b>−{usdCompact(value.dcf.capex)}</b></div>
-                <div title="NOI in 2050 divided by the exit cap rate, discounted."><span>Sites at a {(s.exitCap * 100).toFixed(1)}% cap rate in 2050</span><b>{usdCompact(value.dcf.terminal)}</b></div>
+                <div title={gpu ? "GPUs and halls as they are bought, including new GPUs each time a batch retires." : "Spent month by month as each campus is built."}><span>{gpu ? "GPUs and halls as they are bought" : "Build cost as it is spent"}</span><b>−{usdCompact(value.dcf.capex)}</b></div>
+                {gpu
+                  ? <div title="Cash a year in 2050 after tax and buying new GPUs, held flat and discounted."><span>Halls running on after 2050</span><b>{usdCompact(value.dcf.terminal)}</b></div>
+                  : <div title="NOI in 2050 divided by the exit cap rate, discounted."><span>Sites at a {(s.exitCap * 100).toFixed(1)}% cap rate in 2050</span><b>{usdCompact(value.dcf.terminal)}</b></div>}
               </>
             ) : basis === "pe" ? (
               <>
@@ -212,7 +214,7 @@ export function PriceBridge({ company, value }: { company: Company; value: Valua
             ) : (
               <div className="total"><span>NOI × {s.multiple}</span><b>{usdCompact(ai.ev)}</b></div>
             )}
-            <div className="total"><span>{basis === "dcf" || basis === "cap" ? `Value today at ${(s.dcfRate * 100).toFixed(1)}%` : `Discounted ${value.years.toFixed(1)} years at ${(s.discount * 100).toFixed(1)}%`}</span><b>{usdCompact(value.aiToday)}</b></div>
+            <div className="total"><span>{basis === "dcf" || basis === "cap" ? `Value today at ${(dcfRateFor(company.model, s) * 100).toFixed(1)}%` : `Discounted ${value.years.toFixed(1)} years at ${(s.discount * 100).toFixed(1)}%`}</span><b>{usdCompact(value.aiToday)}</b></div>
           </div>
         </div>
         <div>

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Company, MarketBook } from "@/data/types";
 import { backlog, blocks as toBlocks, ctxFor, liveMw, marketMultiple, pricePath, series, signedMw, sumTiers, TODAY, valuation, yearTable } from "@/lib/forecast";
 import { companyVar } from "@/lib/palette";
+import { appliedBasis } from "@/lib/scenario";
 import { implied, isoToLabel, mw, px, usdCompact } from "@/lib/format";
 import { quoteFor } from "@/lib/quotes";
 import { useHref, useScenario } from "@/components/ScenarioProvider";
@@ -115,7 +116,7 @@ export function ProviderView({ company, market, states, pins, mapSize }: { compa
               <div className="fc-head">
                 <div>
                   <h2>Price, capacity and revenue on one timeline</h2>
-                  <p className="note" style={{ marginTop: 2 }}>{(scenario.basis === "dcf" || scenario.basis === "cap") && company.model !== "gpu-cloud" ? "The dashed line is today's value growing at your required return, which is what a fairly priced share should do." : "The dashed line is what the run-rate is worth each month under your scenario, before discounting."}</p>
+                  <p className="note" style={{ marginTop: 2 }}>{appliedBasis(company.model, scenario) === "dcf" || appliedBasis(company.model, scenario) === "cap" ? "The dashed line is today's value growing at your required return, which is what a fairly priced share should do." : "The dashed line is what the run-rate is worth each month under your scenario, before discounting."}</p>
                 </div>
               </div>
               <ForecastChart

@@ -20,7 +20,9 @@ export function TopBar({ quotes }: { quotes: Pick<Quote, "ticker" | "price" | "c
   const path = usePathname();
   const href = useHref();
   const { scenario, openPanel } = useScenario();
-  const chip = scenarioChip(scenario);
+  // On a company page the chip names that company's method. IREN has its own.
+  const here = companies.find((c) => path?.replace(/\/$/, "").endsWith(`/companies/${c.ticker}`));
+  const chip = scenarioChip(scenario, here?.model);
   const bar = useRef<HTMLElement>(null);
 
   useEffect(() => {
