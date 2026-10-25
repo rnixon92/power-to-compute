@@ -338,7 +338,7 @@ export const companies: Company[] = [
       interestNote: "Q2 interest of $56.4M expensed and $32.7M capitalized, annualized.",
       overhead: (240.0e6 + 14.7e6) + (139.5e6 + 8.3e6) - (56.6e6 + 7.9e6),
       stockPay: 196.3e6,
-      overheadNote: "SG&A over the twelve months to June 30, 2026, related parties included: $338M. $196M of it was stock-based pay, mostly in 2026 as large awards vested, against $51M for all of 2025.",
+      overheadNote: "SG&A over the twelve months to June 30, 2026, related parties included: $338M. $196M of it was stock-based pay, against $51M for all of 2025. It stays high: at March 31, 2026, $368M was still to be expensed over 1.2 years, so the grants now vesting cost about $200M a year. TeraWulf also paid $126M in cash for withholding tax on vesting shares in Q2.",
       taxLosses: { value: 72.174e6, property: -3.8e6, asOf: "2025-12-31", filing: "https://www.sec.gov/Archives/edgar/data/1083301/000108330126000031/" },
     },
     events: [
@@ -350,6 +350,8 @@ export const companies: Company[] = [
       { date: "2026-10-23", kind: "financing", title: "Revolver upsized to about $400M", source: "wulf-revolver" },
     ],
     sources: [
+      { id: "wulf-fluid", title: "TeraWulf, Fluidstack leases and Google backstop", url: "https://investors.terawulf.com/sec-filings/all-sec-filings/content/0001104659-25-078084/tm2523008d2_ex99-1.htm", asOf: "2025-08-14" },
+      { id: "wulf-q1-10q", title: "TeraWulf 10-Q, Q1 2026", url: "https://www.sec.gov/Archives/edgar/data/0001083301/000108330126000092/wulf-20260331.htm", asOf: "2026-05-08" },
       { id: "wulf-q2call", title: "TeraWulf Q2 2026 earnings call", url: "https://www.fool.com/earnings/call-transcripts/2026/08/12/terawulf-wulf-q2-2026-earnings-call-transcript/", asOf: "2026-08-12" },
       { id: "wulf-anthropic", title: "DCD, Anthropic signs $19bn, 20-year lease with TeraWulf", url: "https://www.datacenterdynamics.com/en/news/anthropic-signs-19bn-20-year-lease-for-kentucky-data-center-with-terawulf/", asOf: "2026-07-06" },
       { id: "wulf-q2", title: "TeraWulf Q2 2026 results", url: "https://investors.terawulf.com/sec-filings/all-sec-filings/content/0001083301-26-000162/a_wulfearningsreleaseq22026.htm", asOf: "2026-08-05" },
@@ -439,7 +441,7 @@ export const companies: Company[] = [
         capexKind: "shell",
         capexNote: "Lake Mariner guide of $8–10M per MW. Current estimate $9.1M.",
         source: "wulf-q2",
-        note: "Priced from the first Fluidstack lease at Lake Mariner: $3.7B over 10 years on about 200 MW, or $1.85M per MW a year on average, at the 85% site NOI margin TeraWulf gave. The lease escalates each year at a rate TeraWulf has not disclosed. Q2 HPC lease revenue was $31.9M as halls came online.",
+        note: "Priced from the first Fluidstack lease at Lake Mariner: $3.7B over 10 years on about 200 MW, or $1.85M per MW a year on average, at the 85% site NOI margin TeraWulf gave. The lease escalates each year at a rate TeraWulf has not disclosed; the extension pricing implies about 3%. The Fluidstack part carries two five-year extension options after the 10-year term. Q2 HPC lease revenue was $31.9M as halls came online.",
       },
       {
         id: "wulf-cb4",
@@ -459,7 +461,7 @@ export const companies: Company[] = [
         capexKind: "shell",
         capexNote: "Lake Mariner guide of $8–10M per MW. Current estimate $9.1M.",
         source: "wulf-q2",
-        note: "Priced from the first Fluidstack lease at Lake Mariner: $3.7B over 10 years on about 200 MW, or $1.85M per MW a year on average, at the 85% site NOI margin TeraWulf gave. The lease escalates each year at a rate TeraWulf has not disclosed. Adds half of the more than $300M of extra rent over 10 years that the CB-4 and CB-5 amendments pay for TeraWulf's $150M fit-out contribution.",
+        note: "Priced from the first Fluidstack lease at Lake Mariner: $3.7B over 10 years on about 200 MW, or $1.85M per MW a year on average, at the 85% site NOI margin TeraWulf gave. The lease escalates each year at a rate TeraWulf has not disclosed; the extension pricing implies about 3%. Two five-year extension options follow the 10-year term. Adds half of the more than $300M of extra rent over 10 years that the CB-4 and CB-5 amendments pay for TeraWulf's $150M fit-out contribution.",
       },
       {
         id: "wulf-cb5",
@@ -479,7 +481,7 @@ export const companies: Company[] = [
         capexKind: "shell",
         capexNote: "Lake Mariner guide of $8–10M per MW. Current estimate $9.1M.",
         source: "wulf-q2",
-        note: "Priced from the first Fluidstack lease at Lake Mariner: $3.7B over 10 years on about 200 MW, or $1.85M per MW a year on average, at the 85% site NOI margin TeraWulf gave. The lease escalates each year at a rate TeraWulf has not disclosed. Adds half of the more than $300M of extra rent over 10 years that the CB-4 and CB-5 amendments pay for TeraWulf's $150M fit-out contribution.",
+        note: "Priced from the first Fluidstack lease at Lake Mariner: $3.7B over 10 years on about 200 MW, or $1.85M per MW a year on average, at the 85% site NOI margin TeraWulf gave. The lease escalates each year at a rate TeraWulf has not disclosed; the extension pricing implies about 3%. Two five-year extension options follow the 10-year term. Adds half of the more than $300M of extra rent over 10 years that the CB-4 and CB-5 amendments pay for TeraWulf's $150M fit-out contribution.",
       },
       {
         id: "wulf-justified",
@@ -549,8 +551,8 @@ export const companies: Company[] = [
         tenant: "Core42 and Fluidstack",
         status: "contracted",
         itMw: 438,
-        note: "60 MW to Core42 and 378 MW to Fluidstack, with Google credit support. 102 MW was live in July 2026.",
-        source: "wulf-q2",
+        note: "60 MW to Core42 and 378 MW to Fluidstack, with Google credit support. 102 MW was live in July 2026. The Fluidstack leases carry two five-year extension options: the first leases are worth $3.7B over 10 years and about $8.7B with both options, so rent keeps stepping up about 3% a year through the extensions. CB-5 is on the same terms.",
+        source: "wulf-fluid",
       },
       {
         id: "wulf-justified",
