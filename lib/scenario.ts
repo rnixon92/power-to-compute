@@ -96,7 +96,7 @@ export const defaultScenario: Scenario = {
   renew: true,
   renewRent: 1,
   refitCost: 0,
-  taxWriteOff: 0,
+  taxWriteOff: 0.3,
   year: 2030,
   discount: 0.1,
   leaseRate: 125,

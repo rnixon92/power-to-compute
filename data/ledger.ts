@@ -336,6 +336,7 @@ export const companies: Company[] = [
       overhead: (240.0e6 + 14.7e6) + (139.5e6 + 8.3e6) - (56.6e6 + 7.9e6),
       stockPay: 196.3e6,
       overheadNote: "SG&A over the twelve months to June 30, 2026, related parties included: $338M. $196M of it was stock-based pay, mostly in 2026 as large awards vested, against $51M for all of 2025.",
+      taxLosses: { value: 72.174e6, asOf: "2025-12-31", filing: "https://www.sec.gov/Archives/edgar/data/1083301/000108330126000031/" },
     },
     events: [
       { date: "2025-08-12", kind: "power", title: "Leases the former Cayuga plant for Lake Hawkeye", detail: "About 400 MW gross in Lansing, New York.", source: "wulf-hawk" },
@@ -769,6 +770,7 @@ export const companies: Company[] = [
       overhead: 156.4e6,
       stockPay: 93.9e6,
       overheadNote: "SG&A over the twelve months to June 30, 2026: $156.4M, including $93.9M of stock-based pay. Q4 2025 carried a $7.2M credit.",
+      taxLosses: { value: 159.384e6, asOf: "2025-12-31", filing: "https://www.sec.gov/Archives/edgar/data/1839341/000162828026013305/" },
       other: { label: "Bitcoin mining and hosting", grossProfit: (-12.165e6 + 2.226e6) * 4, note: "Self-mining lost $12.2M in Q2 and hosting made $2.2M." },
     },
     events: [
@@ -831,6 +833,7 @@ export const companies: Company[] = [
       overhead: 126.5e6 + 46.6e6,
       stockPay: 90.7e6,
       overheadNote: "Over the twelve months to June 30, 2026: compensation of $126.5M and G&A of $46.6M. $90.7M was stock-based pay.",
+      taxLosses: { value: 51.187e6, asOf: "2025-12-31", filing: "https://www.sec.gov/Archives/edgar/data/1819989/000181998926000009/" },
       other: { label: "Bitcoin mining", grossProfit: (24.837e6 - 15.046e6) * 4, note: "Q2 mining revenue of $24.8M less $15.0M cost of revenue." },
     },
     events: [
@@ -902,6 +905,7 @@ export const companies: Company[] = [
       overhead: 416.7e6,
       stockPay: 271.2e6,
       overheadNote: "SG&A over the twelve months to August 31, 2026: $416.7M, including $271.2M of stock-based pay.",
+      taxLosses: { value: 159.266e6, asOf: "2026-05-31", filing: "https://www.sec.gov/Archives/edgar/data/1144879/000114487926000048/" },
       other: { label: "Bitcoin hosting", grossProfit: 13.3e6 * 4, note: "Data Center Hosting segment operating profit of $13.3M in fiscal Q1 2027, annualized. The release gives no segment gross profit." },
     },
     events: [
@@ -968,6 +972,7 @@ export const companies: Company[] = [
       overhead: 229.4e6,
       stockPay: 148.5e6,
       overheadNote: "G&A over the twelve months to June 30, 2026: $229.4M, including $148.5M of stock-based pay. Includes American Bitcoin.",
+      taxLosses: { value: 132.352e6, asOf: "2025-12-31", filing: "https://www.sec.gov/Archives/edgar/data/1964789/000110465926019392/" },
       other: { label: "Compute: American Bitcoin mining and GPU", grossProfit: (72.471e6 - 24.691e6) * 4, note: "Q2 Compute revenue of $72.5M less $24.7M cost of revenue." },
     },
     events: [
@@ -1051,6 +1056,7 @@ export const companies: Company[] = [
       overhead: 372.7e6,
       stockPay: 147.3e6,
       overheadNote: "G&A over the twelve months to June 30, 2026: $372.7M, including $147.3M of stock-based pay.",
+      taxLosses: { value: 257.836e6, asOf: "2025-12-31", filing: "https://www.sec.gov/Archives/edgar/data/1507605/000150760526000007/" },
       other: { label: "Bitcoin mining", grossProfit: (170.3e6 - 144.8e6) * 4, note: "Q2 mining revenue of $170.3M less $144.8M of energy, operating and third-party hosting costs." },
     },
     events: [
@@ -1117,6 +1123,7 @@ export const companies: Company[] = [
       overhead: 309.6e6,
       stockPay: 140.8e6,
       overheadNote: "SG&A over the twelve months to June 30, 2026: $309.6M, including $140.8M of stock-based pay.",
+      taxLosses: { value: 170.914e6, asOf: "2025-12-31", filing: "https://www.sec.gov/Archives/edgar/data/1167419/000110465926022322/" },
       other: { label: "Bitcoin mining and engineering", grossProfit: ((113.7e6 - 89.3e6) + (37.3e6 - 27.0e6)) * 4, note: "Q2 mining gross profit of $24.5M and engineering gross profit of $10.3M, before depreciation." },
     },
     events: [
@@ -1371,6 +1378,7 @@ export const companies: Company[] = [
       overhead: 64.1e6 + 26.1e6 + (23.8e6 + 24.9e6 + 27.8e6 + 104.4e6 / 4),
       stockPay: 73.5e6,
       overheadNote: "Over the twelve months to June 30, 2026: G&A of $64.1M, professional fees of $26.1M and payroll of about $103M, with the July–September 2025 quarter taken as a quarter of fiscal 2025. $73.5M was stock-based pay.",
+      taxLosses: { value: 102.142e6, asOf: "2025-09-30", filing: "https://www.sec.gov/Archives/edgar/data/827876/000119312525297510/" },
       other: { label: "Bitcoin mining", grossProfit: (138.0e6 - 85.5e6) * 4, note: "Fiscal Q3 mining revenue of $138.0M less $85.5M cost of revenue." },
     },
     events: [

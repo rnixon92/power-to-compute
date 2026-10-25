@@ -511,8 +511,10 @@ export function leaseFlows(company: Company, list: Block[], s: Scenario): LeaseF
   const writeOff = gpu ? 0 : s.taxWriteOff;
   // Only spend from today gets the write-off. Buildings already paid for keep depreciating as they are.
   const ahead = new Map(on.map((b) => [b, 1 - spentShare(b, now)]));
-  const taxOperating = taxLedger(s.tax);
-  const taxWithInterest = taxLedger(s.tax);
+  // Galaxy is valued from book equity, which already carries this asset, so it is not counted twice.
+  const credit = company.balance?.bookEquity != null ? 0 : company.balance?.taxLosses?.value ?? 0;
+  const taxOperating = taxLedger(s.tax, credit);
+  const taxWithInterest = taxLedger(s.tax, credit);
   // With no renewals, the business winds down once its last signed term ends, and its overhead stops with it.
   const leases = on.filter((b) => b.leaseYears);
   const windDown = !s.renew && leases.length && company.model !== "gpu-cloud" ? Math.max(...leases.map((b) => b.start + b.leaseYears * YEAR)) : Infinity;
@@ -540,7 +542,7 @@ export function leaseFlows(company: Company, list: Block[], s: Scenario): LeaseF
       const at = b.start + b.leaseYears * YEAR;
       if (at < t || at >= t2) return a;
       const book = b.weight * online(b, at) * b.capex * Math.max(0, 1 - b.leaseYears / s.shellLife);
-      return a + book * (1 - s.tax * writeOff);
+      return a + book * (1 - s.tax * writeOff * (ahead.get(b) ?? 0));
     }, 0));
   }
   const end = pointAt(list, s, DCF_END);
@@ -554,18 +556,23 @@ export function leaseFlows(company: Company, list: Block[], s: Scenario): LeaseF
 
 /**
  * Monthly tax with losses carried forward. A loss month adds to the pool, and later profits use it, up to 80% of
- * each month's taxable income, as US rules allow for losses since 2018.
+ * each month's taxable income, as US rules allow for losses since 2018. `credit` is the tax value of losses the
+ * company already carries, used the same way once the new losses run out.
  */
-function taxLedger(rate: number): (taxable: number) => number {
+function taxLedger(rate: number, credit = 0): (taxable: number) => number {
   let pool = 0;
+  let left = credit;
   return (taxable) => {
     if (taxable <= 0) {
       pool -= taxable;
       return 0;
     }
-    const use = Math.min(pool, 0.8 * taxable);
+    const cap = 0.8 * taxable;
+    const use = Math.min(pool, cap);
     pool -= use;
-    return (taxable - use) * rate;
+    const fromCredit = Math.min(left, (cap - use) * rate);
+    left -= fromCredit;
+    return (taxable - use) * rate - fromCredit;
   };
 }
 

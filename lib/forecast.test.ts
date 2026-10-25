@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { book, companies, companyByTicker } from "@/data/ledger";
-import { aiValueAt, averageFactor, blocks, gpuAt, impliedReturn, leaseFlows, refillSpend, rentScale, disclosedLeaseRate, marketMultiple, pointAt, priceByYear, signedMw, spentShare, sumTiers, upside, valuation, yearTable, type Ctx } from "@/lib/forecast";
+import { aiValueAt, averageFactor, blocks, gpuAt, impliedReturn, leaseFlows, refillSpend, rentScale, disclosedLeaseRate, marketMultiple, pointAt, priceByYear, signedMw, spentShare, sumTiers, TODAY, upside, valuation, yearTable, type Ctx } from "@/lib/forecast";
 import { reaction } from "@/lib/events";
 import { decodeScenario, defaultScenario, encodeScenario, presets, type Scenario } from "@/lib/scenario";
 
@@ -297,14 +297,23 @@ describe("lease renewals", () => {
     const cb4 = blocks(wulf, off).find((b) => b.ramp.id === "wulf-cb4")!;
     const f = leaseFlows(wulf, [cb4], off);
     const sold = f.resale.reduce((a, x) => a + x, 0);
-    expect(sold).toBeCloseTo(cb4.capex * (1 - 10 / off.shellLife), -3);
+    const ahead = 1 - spentShare(cb4, Date.parse(TODAY));
+    expect(sold).toBeCloseTo(cb4.capex * (1 - 10 / off.shellLife) * (1 - off.tax * off.taxWriteOff * ahead), -3);
   });
 
   it("writes off part of the build still to come for tax, and carries losses forward", () => {
     const hut = companyByTicker("HUT")!;
     const at = (sc: Scenario) => valuation(hut, blocks(hut, sc), sc, ctx).price!;
-    expect(at({ ...s, taxWriteOff: 0.3 })).toBeGreaterThan(at(s));
+    expect(at({ ...s, taxWriteOff: 0.3 })).toBeGreaterThan(at({ ...s, taxWriteOff: 0 }));
     expect(at({ ...s, tax: 0 })).toBeGreaterThan(at({ ...s, taxWriteOff: 0.6 }));
+  });
+
+  it("uses the tax losses a company already carries against future tax", () => {
+    const without = { ...wulf, balance: { ...wulf.balance!, taxLosses: undefined } };
+    const a = valuation(wulf, blocks(wulf, s), s, ctx).price!;
+    const b = valuation(without, blocks(without, s), s, ctx).price!;
+    expect(a).toBeGreaterThan(b);
+    expect((a - b) * valuation(wulf, blocks(wulf, s), s, ctx).shares!).toBeLessThan(wulf.balance!.taxLosses!.value);
   });
 
   it("charges the refit cost at each renewal", () => {

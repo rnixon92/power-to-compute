@@ -238,6 +238,16 @@ export function BalanceSheet({ company, value }: { company: Company; value: Valu
           </div>
           <b className="tabular">{usdCompact(ai.overheadAi + ai.overheadOther)}/yr</b>
         </div>
+        {bal.taxLosses && bal.bookEquity == null ? (
+          <div>
+            <span className="pill" style={{ justifySelf: "start" }}>Tax</span>
+            <div>
+              <b style={{ fontWeight: 560 }}>Tax losses carried forward</b>
+              <p>The tax value of past losses at {isoToLabel(bal.taxLosses.asOf)}, before any valuation allowance, from the <a className="link" href={bal.taxLosses.filing} target="_blank" rel="noreferrer">10-K</a>. The lease DCF uses it against future tax, up to 80% of each year&apos;s.</p>
+            </div>
+            <b className="tabular">{usdCompact(bal.taxLosses.value)}</b>
+          </div>
+        ) : null}
       </div>
     </div>
   );
