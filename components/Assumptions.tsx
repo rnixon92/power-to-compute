@@ -143,7 +143,7 @@ export function Assumptions({ btc }: { btc: { price: number; asOf: string } | nu
           <YearPicker value={s.year} onChange={(y) => set({ year: y })} />
           <Slider label="Revenue on uncontracted capacity" value={s.gpuRate} min={3} max={20} step={0.1} format={(v) => `$${v.toFixed(1)}M/MW·yr`} hint="The Microsoft contract works out to $9.7M per MW a year." onChange={(v) => set({ gpuRate: v })} />
           <Slider label="Project EBITDA margin" value={s.gpuMargin} min={0.3} max={0.95} step={0.01} format={pct} hint="IREN targets 85% on the Microsoft contract." onChange={(v) => set({ gpuMargin: v })} />
-          <Slider label="GPU cost, where undisclosed" value={s.gpuCost} min={10} max={60} format={(v) => `$${v}M/MW`} onChange={(v) => set({ gpuCost: v })} />
+          <Slider label="GPU cost, where undisclosed" value={s.gpuCost} min={10} max={60} format={(v) => `$${v}M/MW`} hint={`Added to the $${s.buildCost}M building cost. Together that is $${s.gpuCost + s.buildCost}M per MW. The Microsoft contract stays at its disclosed $29M of GPUs.`} onChange={(v) => set({ gpuCost: v })} />
           <Slider label="GPU depreciation life" value={s.gpuLife} min={3} max={8} format={(v) => `${v} years`} onChange={(v) => set({ gpuLife: v })} />
         </Section>
 

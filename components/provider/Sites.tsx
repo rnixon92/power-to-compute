@@ -136,7 +136,7 @@ function SiteCard({ campus, blocks, today, source }: { campus: Campus; blocks: B
               <div className="cell">
                 <span className="eyebrow">Build cost</span>
                 <b>{usdCompact(b.capex)}</b>
-                <small>{b.itMw ? perMw(b.capex / b.itMw) : ""} · {b.capexFrom === "company" ? (b.capexKind === "landlord" ? "Landlord share" : b.capexKind === "gpu" ? "GPU capex" : "Disclosed") : "Your assumption"}</small>
+                <small>{b.itMw ? perMw(b.capex / b.itMw) : ""} · {b.capexFrom === "company" ? (b.capexKind === "landlord" ? "Landlord share" : b.capexKind === "gpu" ? "GPU capex" : "Disclosed") : b.capexKind === "gpu" ? "GPUs plus the building" : "Your assumption"}</small>
                 {r.capexNote ? <small>{r.capexNote}</small> : null}
               </div>
             </div>

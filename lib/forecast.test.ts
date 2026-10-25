@@ -59,6 +59,17 @@ describe("forecast", () => {
     expect(sumTiers(at("IREN", "2026-12-31").revenue)).toBeCloseTo(4e9, -3);
   });
 
+  it("prices undisclosed IREN capacity as GPUs plus the building, and leaves the Microsoft GPUs at $29M", () => {
+    const iren = blocks(companyByTicker("IREN")!, s);
+    const signed = iren.find((b) => b.ramp.id === "iren-2026")!;
+    const open = iren.find((b) => b.ramp.id === "iren-h56")!;
+    expect(signed.capex / signed.itMw).toBe(29e6);
+    expect(signed.life).toBe(s.gpuLife);
+    expect(open.capex / open.itMw).toBe((s.gpuCost + s.buildCost) * 1e6);
+    const annual = (s.gpuCost / s.gpuLife + s.buildCost / s.shellLife) * 1e6;
+    expect(open.capex / open.life).toBeCloseTo(annual * open.itMw, 0);
+  });
+
   it("starts Justified rent on Anthropic's schedule", () => {
     const before = at("WULF", "2027-09-01", flat).revenue.contracted;
     const after = at("WULF", "2028-06-30", flat).revenue.contracted;

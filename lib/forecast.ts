@@ -84,14 +84,22 @@ export function block(company: Company, ramp: Ramp, s: Scenario): Block {
   const kind = ramp.capexKind ?? (gpu ? "gpu" : "shell");
   let capex: number;
   let capexFrom: Block["capexFrom"];
+  let life = kind === "gpu" ? s.gpuLife : s.shellLife;
   if (ramp.capexTotal != null) {
     capex = ramp.capexTotal;
     capexFrom = "company";
   } else if (ramp.capexPerMw != null) {
     capex = ramp.capexPerMw * mw;
     capexFrom = "company";
+  } else if (kind === "gpu") {
+    // IREN builds the hall and buys the GPUs. A disclosed GPU price stays as published. An undisclosed site pays for both.
+    const gpuCapex = s.gpuCost * 1e6 * mw;
+    const shellCapex = s.buildCost * 1e6 * mw;
+    capex = gpuCapex + shellCapex;
+    life = capex / (gpuCapex / s.gpuLife + shellCapex / s.shellLife);
+    capexFrom = "assumed";
   } else {
-    capex = (kind === "gpu" ? s.gpuCost : s.buildCost) * 1e6 * mw;
+    capex = s.buildCost * 1e6 * mw;
     capexFrom = "assumed";
   }
   const start = shift(ramp.start, s.slip);
@@ -114,7 +122,7 @@ export function block(company: Company, ramp: Ramp, s: Scenario): Block {
     capex,
     capexFrom,
     capexKind: kind,
-    life: kind === "gpu" ? s.gpuLife : s.shellLife,
+    life,
     escalator,
     escalatorFrom,
     averageFactor: basis === "average" ? averageFactor(escalator, ramp.termYears ?? 15) : 1,
