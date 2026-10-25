@@ -473,6 +473,11 @@ details.adv .rail-grid { display: grid; gap: 14px; }
 .summary-text p.lead { color: var(--ink); font-size: 17px; line-height: 1.5; letter-spacing: -0.01em; }
 .summary-text b { color: var(--ink); font-weight: 620; }
 .summary .table-wrap { border-top: 1px solid var(--line); }
+/* ---------- Excel export ---------- */
+.excel-card { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 14px; flex-wrap: wrap; }
+.excel-card > div { flex: 1; min-width: 240px; max-width: 640px; }
+.excel-card .btn { flex: none; }
+
 /* ---------- GPU cloud strip ---------- */
 .gpu-strip { display: flex; align-items: center; gap: 16px; padding: 14px 16px; margin-bottom: 14px; flex-wrap: wrap; }
 .gpu-strip-main { display: flex; align-items: center; gap: 12px 28px; flex: 1; flex-wrap: wrap; min-width: 0; }

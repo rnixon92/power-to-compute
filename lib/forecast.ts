@@ -342,7 +342,7 @@ export function ctxFor(market: MarketBook, ticker: string): Ctx {
 }
 
 /** Build spend runs from a year before first capacity until the block is fully online. */
-const BUILD_LEAD = 12;
+export const BUILD_LEAD = 12;
 
 export function spentShare(b: Block, t: number): number {
   const d = new Date(b.start);
@@ -463,7 +463,7 @@ export function interimCash(company: Company, list: Block[], s: Scenario, to: nu
 }
 
 /** Years over which today's interest cost runs off, as project debt amortizes over its leases. */
-const DEBT_RUNOFF_YEARS = 15;
+export const DEBT_RUNOFF_YEARS = 15;
 
 /** Lease DCF runs monthly to here, then values each site at the exit cap rate. */
 export const DCF_END = Date.UTC(2050, 11, 31);
@@ -590,9 +590,9 @@ export function leaseFlows(company: Company, list: Block[], s: Scenario): LeaseF
  */
 export const STATE_TAX: Record<string, number> = { TX: 0.0075, NY: 0.0725, KY: 0.05, NC: 0.02, GA: 0.0519, OK: 0.04, AL: 0.065, ND: 0.0431, LA: 0.055, OH: 0, NE: 0.052, BC: 0.076 };
 /** Used where a company has not named the state. */
-const STATE_TAX_UNKNOWN = 0.05;
+export const STATE_TAX_UNKNOWN = 0.05;
 
-function stateOf(company: Company, campusId: string): string | null {
+export function stateOf(company: Company, campusId: string): string | null {
   const c = company.campuses.find((x) => x.id === campusId);
   if (!c) return null;
   if (c.state) return c.state;

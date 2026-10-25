@@ -15,6 +15,7 @@ import { UsMap, type Pin } from "@/components/charts/UsMap";
 import { PriceBridge, Summary } from "@/components/provider/Summary";
 import { EventList } from "@/components/EventList";
 import { BuildCalendar } from "@/components/BuildCalendar";
+import { ExcelExport } from "@/components/provider/ExcelExport";
 import { allEvents } from "@/lib/events";
 import { Sites } from "@/components/provider/Sites";
 import { BalanceSheet, Contracts, Financing, Sources, YearTable } from "@/components/provider/Sections";
@@ -112,6 +113,7 @@ export function ProviderView({ company, market, states, pins, mapSize }: { compa
           <section id="forecast">
             <Summary company={company} ctx={ctx} value={value} multiple={multiple} />
             <PriceBridge company={company} value={value} />
+            {company.model !== "gpu-cloud" && company.balance ? <ExcelExport company={company} ctx={ctx} value={value} /> : null}
             <div className="card fc" style={{ marginTop: 14 }}>
               <div className="fc-head">
                 <div>
