@@ -13,6 +13,12 @@ export interface Scenario {
   dcfRate: number;
   /** Lease DCF: what a site sells for at the end of the forecast, as a cap rate on its NOI then. */
   exitCap: number;
+  /** When a lease ends, the tenant renews. Off, the site earns nothing after its signed term. */
+  renew: boolean;
+  /** Rent on renewal as a share of the rent just before it. It keeps escalating from there. */
+  renewRent: number;
+  /** Refit cost at each renewal, $M per IT MW, for cooling and electrical gear that has worn out. */
+  refitCost: number;
   /** Value the run-rate at the end of this year. */
   year: number;
   discount: number;
@@ -85,6 +91,9 @@ export const defaultScenario: Scenario = {
   capRate: 0.075,
   dcfRate: 0.08,
   exitCap: 0.07,
+  renew: true,
+  renewRent: 1,
+  refitCost: 0,
   year: 2030,
   discount: 0.1,
   leaseRate: 125,
@@ -178,7 +187,7 @@ export function scenarioChip(s: Scenario, model?: ModelKind): { main: string; sc
   const main = model === "gpu-cloud"
     ? s.gpuMethod === "dcf" ? `Compute DCF ${pctOf(s.gpuReturn)}` : `${s.multiple}× · ${s.year}`
     : s.basis === "dcf"
-    ? `Lease DCF ${pctOf(s.dcfRate)}`
+    ? `Lease DCF ${pctOf(s.dcfRate)}${s.renew ? "" : " · terms only"}`
     : s.basis === "cap"
       ? `${pctOf(s.capRate)} cap rate`
       : s.basis === "pe"
@@ -207,7 +216,12 @@ export function methodLine(model: ModelKind, s: Scenario): { label: string; deta
     if (basis === "dcf") return { label: `Compute DCF at ${pctOf(s.gpuReturn)}`, detail: `Each batch of GPUs earns its contract, then ${pctOf(s.gpuRelet)} of that price until it retires after ${s.gpuLife} years.${s.gpuRefresh ? ` Halls are then refilled with new GPUs on ${s.gpuTerm}-year contracts at $${s.gpuRate}M per MW.` : " Halls stay empty after that."} Discounted at ${pctOf(s.gpuReturn)}.` };
     return { label: `${s.multiple}× earnings, end ${s.year}`, detail: `The end-${s.year} run-rate at ${s.multiple}× earnings, discounted to today.` };
   }
-  if (basis === "dcf") return { label: `Lease DCF at ${pctOf(s.dcfRate)}`, detail: `Rent over each lease, discounted at ${pctOf(s.dcfRate)}, with sites sold at a ${pctOf(s.exitCap)} cap rate in 2050.` };
+  if (basis === "dcf") {
+    const after = !s.renew
+      ? "stopping when each signed term ends."
+      : `${s.renewRent === 1 ? "renewing on the same escalating rent" : `renewing at ${pctOf(s.renewRent)} of the last rent`}${s.refitCost ? ` with a $${s.refitCost}M/MW refit` : ""}, and sites sold at a ${pctOf(s.exitCap)} cap rate in 2050.`;
+    return { label: `Lease DCF at ${pctOf(s.dcfRate)}${s.renew ? "" : ", signed terms"}`, detail: `Rent over each lease, discounted at ${pctOf(s.dcfRate)}, ${after}` };
+  }
   if (basis === "cap") return { label: `${pctOf(s.capRate)} cap rate`, detail: `Each site's average NOI over its lease, capitalized at ${pctOf(s.capRate)} once fully online and discounted at ${pctOf(s.dcfRate)}.` };
   return { label: `${s.multiple}× ${basis === "pe" ? "earnings" : "EBITDA"}, end ${s.year}`, detail: `The end-${s.year} run-rate at ${s.multiple}× ${basis === "pe" ? "earnings" : "EBITDA"}, discounted to today.` };
 }
@@ -252,6 +266,8 @@ const numParams: { key: NumKey; q: string; scale: number; min: number; max: numb
   { key: "escalator", q: "esc", scale: 100, min: 0, max: 8 },
   { key: "leaseOdds", q: "lo", scale: 100, min: 0, max: 100 },
   { key: "gpuReturn", q: "gdr", scale: 100, min: 4, max: 25 },
+  { key: "renewRent", q: "rr", scale: 100, min: 0, max: 150 },
+  { key: "refitCost", q: "rf", scale: 1, min: 0, max: 20 },
   { key: "gpuTerm", q: "gt", scale: 1, min: 1, max: 10 },
   { key: "gpuRelet", q: "grl", scale: 100, min: 0, max: 100 },
 ];
@@ -267,6 +283,7 @@ export function encodeScenario(s: Scenario): string {
   if (s.stockPay !== defaultScenario.stockPay) p.set("sp", s.stockPay ? "1" : "0");
   if (s.gpuMethod !== defaultScenario.gpuMethod) p.set("gv", s.gpuMethod);
   if (s.gpuRefresh !== defaultScenario.gpuRefresh) p.set("grf", s.gpuRefresh ? "1" : "0");
+  if (s.renew !== defaultScenario.renew) p.set("rn", s.renew ? "1" : "0");
   const tiers = TIERS.filter((t) => s.tiers[t]).map((t) => tierCode[t]).join("");
   const defaultTiers = TIERS.filter((t) => defaultScenario.tiers[t]).map((t) => tierCode[t]).join("");
   if (tiers !== defaultTiers) p.set("t", tiers || "-");
@@ -286,6 +303,7 @@ export function decodeScenario(params: URLSearchParams): Scenario {
   }
   if (params.get("sp") === "0") s.stockPay = false;
   if (params.get("grf") === "0") s.gpuRefresh = false;
+  if (params.get("rn") === "0") s.renew = false;
   const gv = params.get("gv");
   if (gv === "dcf" || gv === "pe") s.gpuMethod = gv;
   const basis = params.get("b");

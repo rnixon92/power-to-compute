@@ -261,6 +261,43 @@ describe("lease DCF", () => {
   });
 });
 
+describe("lease renewals", () => {
+  const wulf = companyByTicker("WULF")!;
+  const priceOf = (sc: Scenario) => valuation(wulf, blocks(wulf, sc), sc, ctx);
+
+  it("keeps renewing at the escalated rent by default, and splits out what comes after the signed terms", () => {
+    const v = priceOf(s);
+    expect(v.dcf!.renewal).toBeGreaterThan(0);
+    expect(v.dcf!.renewal).toBeLessThan(v.dcf!.operating);
+  });
+
+  it("stops rent at the end of each signed term when renewals are off, with nothing left to sell in 2050", () => {
+    const off = { ...s, renew: false };
+    const v = priceOf(off);
+    expect(v.dcf!.renewal).toBe(0);
+    expect(v.dcf!.terminal).toBe(0);
+    expect(v.price!).toBeLessThan(priceOf(s).price!);
+    const cb4 = blocks(wulf, off).find((b) => b.ramp.id === "wulf-cb4")!;
+    expect(pointAt([cb4], off, cb4.start + 11 * 365.25 * 86_400_000).noi).toBe(0);
+  });
+
+  it("resets rent to your share at each renewal, then keeps escalating", () => {
+    const cut = { ...s, renewRent: 0.8 };
+    const cb4 = blocks(wulf, cut).find((b) => b.ramp.id === "wulf-cb4")!;
+    const year = 365.25 * 86_400_000;
+    const before = rentScale(cb4, cb4.start + 9.99 * year);
+    const after = rentScale(cb4, cb4.start + 10.01 * year);
+    expect(after / before).toBeCloseTo(0.8, 2);
+    expect(rentScale(cb4, cb4.start + 11.01 * year) / after).toBeCloseTo(1 + cb4.escalator, 2);
+  });
+
+  it("charges the refit cost at each renewal", () => {
+    const a = priceOf(s).dcf!.capex;
+    const b = priceOf({ ...s, refitCost: 3 }).dcf!.capex;
+    expect(b).toBeGreaterThan(a);
+  });
+});
+
 describe("compute DCF", () => {
   const iren = companyByTicker("IREN")!;
   const h1 = () => blocks(iren, s).find((b) => b.ramp.id === "iren-live")!;

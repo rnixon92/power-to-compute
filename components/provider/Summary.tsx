@@ -189,12 +189,19 @@ export function PriceBridge({ company, value }: { company: Company; value: Valua
             ) : null}
             {basis === "dcf" && value.dcf ? (
               <>
-                <div title="Each month to 2050, after overhead and tax, discounted at your required return."><span>{gpu ? "Contract cash flows to 2050" : "Lease cash flows to 2050"}</span><b>{usdCompact(value.dcf.operating)}</b></div>
+                {gpu ? (
+                  <div title="Each month to 2050, after overhead and tax, discounted at your required return."><span>Contract cash flows to 2050</span><b>{usdCompact(value.dcf.operating)}</b></div>
+                ) : (
+                  <>
+                    <div title="Rent over each signed term, after overhead and tax, discounted at your required return."><span>Rent over the signed terms</span><b>{usdCompact(value.dcf.operating - value.dcf.renewal)}</b></div>
+                    {s.renew ? <div title={`Rent after each signed term ends, to 2050, at ${Math.round(s.renewRent * 100)}% of the last rent, after overhead and tax.`}><span>Rent from renewals to 2050</span><b>{usdCompact(value.dcf.renewal)}</b></div> : null}
+                  </>
+                )}
                 {value.dcf.shield > 0 ? <div title={company.balance?.interestNote}><span>Tax saved on interest</span><b>+{usdCompact(value.dcf.shield)}</b></div> : null}
-                <div title={gpu ? "GPUs and halls as they are bought, including new GPUs each time a batch retires." : "Spent month by month as each campus is built."}><span>{gpu ? "GPUs and halls as they are bought" : "Build cost as it is spent"}</span><b>−{usdCompact(value.dcf.capex)}</b></div>
+                <div title={gpu ? "GPUs and halls as they are bought, including new GPUs each time a batch retires." : "Spent month by month as each campus is built."}><span>{gpu ? "GPUs and halls as they are bought" : s.renew && s.refitCost ? "Build and refit cost as it is spent" : "Build cost as it is spent"}</span><b>−{usdCompact(value.dcf.capex)}</b></div>
                 {gpu
                   ? <div title="Cash a year in 2050 after tax and buying new GPUs, held flat and discounted."><span>Halls running on after 2050</span><b>{usdCompact(value.dcf.terminal)}</b></div>
-                  : <div title="NOI in 2050 divided by the exit cap rate, discounted."><span>Sites at a {(s.exitCap * 100).toFixed(1)}% cap rate in 2050</span><b>{usdCompact(value.dcf.terminal)}</b></div>}
+                  : s.renew ? <div title="NOI in 2050 divided by the exit cap rate, discounted."><span>Sites at a {(s.exitCap * 100).toFixed(1)}% cap rate in 2050</span><b>{usdCompact(value.dcf.terminal)}</b></div> : null}
               </>
             ) : basis === "pe" ? (
               <>

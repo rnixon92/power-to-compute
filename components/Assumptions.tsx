@@ -100,6 +100,17 @@ export function Assumptions({ btc }: { btc: { price: number; asOf: string } | nu
               <p className="note">Every month of rent over each lease, after overhead and tax, less build cost as it is spent. Each site is sold at the exit cap rate in 2050.</p>
               <Slider label="Required return" value={s.dcfRate} min={0.05} max={0.14} step={0.0025} format={(v) => rate(v)} hint="Investment-grade project debt here costs 6–7.75%. Equity asks more." onChange={(v) => set({ dcfRate: v })} />
               <Slider label="Exit cap rate, 2050" value={s.exitCap} min={0.05} max={0.1} step={0.0025} format={(v) => rate(v)} hint="What a powered, leased site sells for at the end. Higher is more cautious." onChange={(v) => set({ exitCap: v })} />
+              <div style={{ display: "grid", gap: 8 }}>
+                <div className="slider-top"><span>When a lease ends</span></div>
+                <Segmented label="When a lease ends" size="sm" value={s.renew ? "renew" : "stop"} onChange={(v) => set({ renew: v === "renew" })} options={[{ value: "renew", label: "Tenant renews" }, { value: "stop", label: "Signed terms only" }]} />
+                <small className="note">{s.renew ? "Rent carries on past each signed term to 2050, then the site is sold at the exit cap rate. Most of these leases carry renewal options." : "Rent stops when each signed term ends, overhead stops when the last one does, and nothing is sold in 2050. The floor: what the signed contracts alone pay for."}</small>
+              </div>
+              {s.renew ? (
+                <>
+                  <Slider label="Rent on renewal, share of the last rent" value={s.renewRent} min={0.5} max={1.2} step={0.05} format={pct} hint="100% carries the escalated rent on. Lower if rents reset toward the market when a lease rolls." onChange={(v) => set({ renewRent: v })} />
+                  <Slider label="Refit cost at each renewal" value={s.refitCost} min={0} max={8} step={0.5} format={(v) => (v ? `$${v}M/MW` : "None")} hint="Cooling and electrical gear wears out over 10–20 years. Charged each time a lease rolls." onChange={(v) => set({ refitCost: v })} />
+                </>
+              ) : null}
             </>
           ) : s.basis === "cap" ? (
             <>

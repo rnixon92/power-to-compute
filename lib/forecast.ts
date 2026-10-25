@@ -34,6 +34,9 @@ export interface Block {
   weight: number;
   /** GPU cloud only: what the first batch of GPUs earns and costs. */
   gpu?: GpuTerms;
+  /** Signed lease length in years, which sets when renewals happen. Zero for GPU cloud, which re-lets its own way. */
+  leaseYears: number;
+  renewRent: number;
 }
 
 export interface GpuTerms {
@@ -56,9 +59,16 @@ export function averageFactor(g: number, years: number): number {
 
 /** Rent and NOI at time t, relative to the figure on the block: grows from rent start, starting below the average. */
 export function rentScale(b: Block, t: number): number {
-  if (!b.escalator) return 1;
   const years = Math.max(0, (t - b.start) / YEAR);
-  return Math.pow(1 + b.escalator, years) / b.averageFactor;
+  const grown = b.escalator ? Math.pow(1 + b.escalator, years) / b.averageFactor : 1;
+  // Each renewal resets rent to a share of what it was, and it keeps escalating from there.
+  const renewals = b.leaseYears ? Math.floor(years / b.leaseYears) : 0;
+  return renewals && b.renewRent !== 1 ? grown * Math.pow(b.renewRent, renewals) : grown;
+}
+
+/** The signed term is over and the site is on a renewal. */
+export function leaseEnded(b: Block, t: number): boolean {
+  return b.leaseYears > 0 && t >= b.start + b.leaseYears * YEAR;
 }
 
 export function itMw(ramp: Ramp, s: Scenario): number {
@@ -146,6 +156,8 @@ export function block(company: Company, ramp: Ramp, s: Scenario): Block {
     escalatorFrom,
     averageFactor: basis === "average" ? averageFactor(escalator, ramp.termYears ?? 15) : 1,
     weight: ramp.tier === "announced" || ramp.tier === "pipeline" ? s.leaseOdds : 1,
+    leaseYears: gpu ? 0 : ramp.termYears ?? 15,
+    renewRent: s.renewRent,
     gpu: gpu && kind === "gpu" && mw > 0
       ? { gpuCapex, shellCapex, price: revenue / mw, cost: (revenue - noi) / mw, term: ramp.termYears ?? s.gpuTerm }
       : undefined,
@@ -232,6 +244,8 @@ export interface Point {
   mwAll: number;
   revenueAll: number;
   noi: number;
+  /** The part of NOI from sites past their signed term, on renewals. */
+  renewalNoi: number;
   da: number;
   interest: number;
   debt: number;
@@ -246,6 +260,7 @@ export function pointAt(list: Block[], s: Scenario, t: number): Point {
   let mwAll = 0;
   let revenueAll = 0;
   let noi = 0;
+  let renewalNoi = 0;
   let da = 0;
   let interest = 0;
   let debt = 0;
@@ -266,6 +281,8 @@ export function pointAt(list: Block[], s: Scenario, t: number): Point {
     }
     const f = online(b, t);
     if (!f) continue;
+    const renewed = leaseEnded(b, t);
+    if (renewed && !s.renew) continue;
     const k = rentScale(b, t);
     mwAll += f * b.itMw;
     revenueAll += f * b.revenue * k;
@@ -274,6 +291,7 @@ export function pointAt(list: Block[], s: Scenario, t: number): Point {
     mw[b.ramp.tier] += f * b.itMw;
     revenue[b.ramp.tier] += w * b.revenue * k;
     noi += w * b.noi * k;
+    if (renewed) renewalNoi += w * b.noi * k;
     da += (w * b.capex) / b.life;
     const d = w * b.capex * s.leverage;
     debt += d;
@@ -281,7 +299,7 @@ export function pointAt(list: Block[], s: Scenario, t: number): Point {
   }
   const pretax = noi - da - interest;
   const earnings = pretax > 0 ? pretax * (1 - s.tax) : pretax;
-  return { t, mw, revenue, mwAll, revenueAll, noi, da, interest, debt, earnings };
+  return { t, mw, revenue, mwAll, revenueAll, noi, renewalNoi, da, interest, debt, earnings };
 }
 
 export function sumTiers(r: Record<Tier, number>): number {
@@ -445,6 +463,8 @@ export const DCF_END = Date.UTC(2050, 11, 31);
 export interface Dcf {
   /** NOI after overhead and tax, each month to 2050, discounted. */
   operating: number;
+  /** The part of operating that comes from renewals after the signed terms. */
+  renewal: number;
   /** Tax saved because interest on the company's debt is deductible, discounted. */
   shield: number;
   /** Build cost in the month it is spent, discounted. */
@@ -463,6 +483,7 @@ function nextMonth(t: number): number {
 export interface LeaseFlows {
   years: number[];
   operating: number[];
+  renewal: number[];
   capex: number[];
   shield: number[];
   /** NOI after overhead in 2050, for the exit value. */
@@ -476,44 +497,61 @@ export function leaseFlows(company: Company, list: Block[], s: Scenario): LeaseF
   const on = list.filter((b) => b.enabled);
   const years: number[] = [];
   const operating: number[] = [];
+  const renewal: number[] = [];
   const capex: number[] = [];
   const shield: number[] = [];
   const interest = company.balance?.interest ?? 0;
+  // With no renewals, the business winds down once its last signed term ends, and its overhead stops with it.
+  const leases = on.filter((b) => b.leaseYears);
+  const windDown = !s.renew && leases.length && company.model !== "gpu-cloud" ? Math.max(...leases.map((b) => b.start + b.leaseYears * YEAR)) : Infinity;
   for (let t = now; t < DCF_END; t = nextMonth(t)) {
     const t2 = nextMonth(t);
     const p = pointAt(list, s, t);
-    const ai = aiValueAt(company, p, s);
+    const ai = t >= windDown ? { ...aiValueAt(company, p, s), noi: 0 } : aiValueAt(company, p, s);
     const taxable = ai.noi - p.da;
     const tax = Math.max(0, taxable) * s.tax;
     // Interest runs off as project debt amortizes. Only the tax actually avoided counts, so a loss year saves nothing.
     const owed = interest * Math.max(0, 1 - (t - now) / YEAR / DEBT_RUNOFF_YEARS);
     years.push((t - now) / YEAR);
     operating.push((ai.noi - tax) / 12);
+    // Overhead and tax fall on renewal years in proportion to the NOI they bring.
+    renewal.push(p.noi > 0 ? ((ai.noi - tax) / 12) * (p.renewalNoi / p.noi) : 0);
     shield.push((tax - Math.max(0, taxable - owed) * s.tax) / 12);
-    capex.push(on.reduce((a, b) => a + b.weight * (b.capex * (spentShare(b, t2) - spentShare(b, t)) + refillSpend(b, s, t, t2)), 0));
+    capex.push(on.reduce((a, b) => a + b.weight * (b.capex * (spentShare(b, t2) - spentShare(b, t)) + refillSpend(b, s, t, t2) + refitSpend(b, s, t, t2)), 0));
   }
   const end = pointAt(list, s, DCF_END);
-  const endNoi = aiValueAt(company, end, s).noi;
-  if (company.model !== "gpu-cloud") return { years, operating, capex, shield, endNoi };
+  const endNoi = DCF_END >= windDown ? 0 : aiValueAt(company, end, s).noi;
+  if (company.model !== "gpu-cloud") return { years, operating, renewal, capex, shield, endNoi };
   // GPU halls never stabilize the way a lease does: they keep buying GPUs. The exit is that steady cash, held flat.
   const refills = s.gpuRefresh ? on.reduce((a, b) => a + (b.gpu ? (b.weight * b.itMw * s.gpuCost * 1e6) / s.gpuLife : 0), 0) : 0;
   const endFree = endNoi - Math.max(0, endNoi - end.da) * s.tax - refills;
-  return { years, operating, capex, shield, endNoi, endFree };
+  return { years, operating, renewal, capex, shield, endNoi, endFree };
+}
+
+/** Refit cost at each renewal that falls between t and t2, for sites that are online and renewing. */
+function refitSpend(b: Block, s: Scenario, t: number, t2: number): number {
+  if (!s.renew || !s.refitCost || !b.leaseYears) return 0;
+  const step = b.leaseYears * YEAR;
+  const k = Math.max(1, Math.ceil((t - b.start) / step));
+  const at = b.start + k * step;
+  return at >= t && at < t2 ? online(b, at) * b.itMw * s.refitCost * 1e6 : 0;
 }
 
 export function discountFlows(f: LeaseFlows, r: number, exitCap: number): Dcf {
   let operating = 0;
+  let renewal = 0;
   let capex = 0;
   let shield = 0;
   for (let i = 0; i < f.years.length; i++) {
     const df = Math.pow(1 + r, f.years[i]);
     operating += f.operating[i] / df;
+    renewal += f.renewal[i] / df;
     capex += f.capex[i] / df;
     shield += f.shield[i] / df;
   }
   const exit = f.endFree != null ? Math.max(0, f.endFree) / r : f.endNoi / exitCap;
   const terminal = exit / Math.pow(1 + r, (DCF_END - Date.parse(TODAY)) / YEAR);
-  return { operating, shield, capex, terminal };
+  return { operating, renewal, shield, capex, terminal };
 }
 
 /** Cash flows of the switched-on leases over their life, discounted at rate r. */
