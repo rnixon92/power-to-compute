@@ -92,9 +92,10 @@ export function block(company: Company, ramp: Ramp, s: Scenario): Block {
     capex = ramp.capexPerMw * mw;
     capexFrom = "company";
   } else if (kind === "gpu") {
-    // IREN builds the hall and buys the GPUs. A disclosed GPU price stays as published. An undisclosed site pays for both.
+    // IREN builds the hall and buys the GPUs. A disclosed GPU price stays as published. An undisclosed site pays for both,
+    // unless the GPUs go into a hall it already has.
     const gpuCapex = s.gpuCost * 1e6 * mw;
-    const shellCapex = s.buildCost * 1e6 * mw;
+    const shellCapex = ramp.retrofit ? 0 : s.buildCost * 1e6 * mw;
     capex = gpuCapex + shellCapex;
     life = capex / (gpuCapex / s.gpuLife + shellCapex / s.shellLife);
     capexFrom = "assumed";

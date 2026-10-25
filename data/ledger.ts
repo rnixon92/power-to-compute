@@ -161,6 +161,8 @@ export const companies: Company[] = [
         full: "2027-12-31",
         timing: "estimate",
         capexKind: "gpu",
+        retrofit: true,
+        capexNote: "Existing air-cooled halls. IREN's CFO calls the retrofit capex modest, so only the GPUs are counted.",
         source: "iren-tr",
         note: "2027 plan. About 60 MW supports an NVIDIA AI cloud contract.",
       },

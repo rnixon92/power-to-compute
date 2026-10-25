@@ -88,6 +88,8 @@ export interface Ramp {
   capexPerMw?: number;
   capexTotal?: number;
   capexKind?: "shell" | "gpu" | "landlord";
+  /** GPUs go into a building the company already has, so an undisclosed cost covers the GPUs only. */
+  retrofit?: boolean;
   /** One line on where the build cost comes from. */
   capexNote?: string;
   source: string;

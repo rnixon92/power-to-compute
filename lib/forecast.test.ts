@@ -68,6 +68,9 @@ describe("forecast", () => {
     expect(open.capex / open.itMw).toBe((s.gpuCost + s.buildCost) * 1e6);
     const annual = (s.gpuCost / s.gpuLife + s.buildCost / s.shellLife) * 1e6;
     expect(open.capex / open.life).toBeCloseTo(annual * open.itMw, 0);
+    const retrofit = iren.find((b) => b.ramp.id === "iren-air")!;
+    expect(retrofit.capex / retrofit.itMw).toBe(s.gpuCost * 1e6);
+    expect(retrofit.life).toBe(s.gpuLife);
   });
 
   it("starts Justified rent on Anthropic's schedule", () => {
