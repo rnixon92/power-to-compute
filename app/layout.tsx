@@ -5,6 +5,7 @@ import { Assumptions } from "@/components/Assumptions";
 import { ScenarioProvider } from "@/components/ScenarioProvider";
 import { TopBar } from "@/components/TopBar";
 import { readMarket } from "@/lib/market";
+import { companies } from "@/data/ledger";
 import "./globals.css";
 
 
@@ -32,6 +33,9 @@ const themeScript = `try{var t=localStorage.getItem("psp-theme");if(t)document.d
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const market = await readMarket();
   const quotes = market.quotes.map(({ ticker, price, changePercent }) => ({ ticker, price, changePercent }));
+  const stamp = (iso: string, time: boolean) =>
+    new Date(iso).toLocaleString("en-US", { day: "numeric", month: "short", year: "numeric", ...(time ? { hour: "numeric", minute: "2-digit", timeZone: "America/New_York", timeZoneName: "short" } : { timeZone: "UTC" }) });
+  const reviewed = companies.reduce((a, c) => (c.reviewedAt > a ? c.reviewedAt : a), "");
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -46,7 +50,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <footer className="footer">
               <div className="wrap">
                 <span>Research tracker. Company figures are their own disclosures, including forward-looking ones. Implied prices are your assumptions applied to those figures. Not investment advice.</span>
-                <span>Prices from Nasdaq, refreshed every 15 minutes. Ledger reviewed 24 Oct 2026.</span>
+                <span>Prices from Nasdaq as of {stamp(market.fetchedAt, true)}, refreshed through the US session and after the close. Ledger reviewed {stamp(reviewed, false)}.</span>
               </div>
             </footer>
           </ScenarioProvider>
