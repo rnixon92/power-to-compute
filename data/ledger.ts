@@ -774,7 +774,7 @@ export const companies: Company[] = [
     cik: 1839341,
     inBook: true,
     reviewedAt: "2026-10-26",
-    summary: "Two big tenant programs. CoreWeave leases about 590 MW across five sites, with the tenant paying most of the build. A second program with AMD adds 530 MW and $14B of rent over 15 years.",
+    summary: "Two big tenant programs. CoreWeave leases about 590 MW for $10.2B over 12 years, paying most of the build. A second program with AMD adds 530 MW and $14B of rent over 15 years.",
     outside: "Self-mining lost money in Q2, so mining adds nothing to the price here.",
     balance: {
       asOf: "2026-06-30",
@@ -785,7 +785,10 @@ export const companies: Company[] = [
       debtNote: "Long-term debt at carrying amount, including the convertible notes.",
       interest: 52.4e6 * 4,
       interestNote: "Q2 interest incurred, $52.4M, annualized.",
-      claims: [{ label: "Warrants", value: 1_811.6e6 + 163.7e6, note: "Warrant liabilities at fair value on June 30. They settle in shares, so they are a claim on the equity." }],
+      claims: [
+        { label: "Warrants", value: 1_811.6e6 + 163.7e6, note: "Warrant liabilities at fair value on June 30. They settle in shares, so they are a claim on the equity." },
+        { label: "Customer prepayments", value: 287.2e6 + 367.2e6, note: "Deferred revenue: base license fees CoreWeave prepaid to fund site development. The cash came in and went into the build, and the forecast counts the full contract revenue, so the prepaid part comes off here." },
+      ],
       overhead: 156.4e6,
       stockPay: 93.9e6,
       overheadNote: "SG&A over the twelve months to June 30, 2026: $156.4M, including $93.9M of stock-based pay. Q4 2025 carried a $7.2M credit.",
@@ -797,6 +800,8 @@ export const companies: Company[] = [
       { date: "2026-08-01", kind: "lease", title: "AMD program: 530 MW and over $14B", detail: "15 years. About 380 MW triple-net to AMD and 150 MW to a neocloud with AMD credit support.", source: "corz-q2" },
     ],
     sources: [
+      { id: "corz-cw", title: "Core Scientific and CoreWeave, $10.2B over 12-year terms", url: "https://www.sec.gov/Archives/edgar/data/1839341/000162828025008312/ex991-coreweavepressrelease.htm", asOf: "2025-02-26" },
+      { id: "corz-10q2", title: "Core Scientific 10-Q, Q2 2026", url: "https://www.sec.gov/Archives/edgar/data/1839341/000183934126000014/core-20260630.htm", asOf: "2026-07-28" },
       { id: "corz-q2pr", title: "Core Scientific Q2 2026 results", url: "https://www.sec.gov/Archives/edgar/data/1839341/000183934126000013/q22026corescientificinc-ea.htm", asOf: "2026-07-28" },
       { id: "corz-deck", title: "Core Scientific Q1 FY26 deck", url: "https://www.sec.gov/Archives/edgar/data/1839341/000162828026031246/q1fy26earningsdeck.htm", asOf: "2026-05-01" },
       { id: "corz-10q", title: "Core Scientific 10-Q, May 2026", url: "https://last10k.com/sec-filings/corz/0001628280-26-031396.htm", asOf: "2026-05-01" },
@@ -813,17 +818,17 @@ export const companies: Company[] = [
       { id: "auburn", name: "Auburn", place: "Auburn, Alabama", state: "AL", lat: 32.61, lng: -85.48, phases: [{ id: "auburn-p", name: "Neocloud, AMD credit support", unit: "critical-it", status: "contracted", tenant: "Neocloud backed by AMD", source: "corz-q2", note: "Part of about 150 MW with Dalton." }] },
     ],
     ramps: [
-      { id: "corz-marble", campus: "marble", label: "Marble", tier: "live", tenant: "CoreWeave", mw: 65, unit: "leased-power", start: "2026-05-01", timing: "company", revenue: 850e6 * (65 / 590), margin: 0.825, capexPerMw: 1.5e6, capexKind: "landlord", capexNote: "Core funds up to about $1.5M per MW. CoreWeave pays the rest.", source: "corz-deck", note: "Revenue is this site's share of the $850M CoreWeave program, by megawatts." },
-      { id: "corz-austin", campus: "austin", label: "Austin", tier: "live", tenant: "CoreWeave", mw: 20, unit: "leased-power", start: "2026-05-01", timing: "company", revenue: 850e6 * (20 / 590), margin: 0.825, capexPerMw: 1.5e6, capexKind: "landlord", capexNote: "Core funds up to about $1.5M per MW. CoreWeave pays the rest.", source: "corz-deck", note: "Revenue is this site's share of the $850M CoreWeave program, by megawatts." },
-      { id: "corz-denton", campus: "denton", label: "Denton", tier: "contracted", tenant: "CoreWeave", mw: 260, unit: "leased-power", start: "2026-01-01", full: "2026-09-30", timing: "estimate", revenue: 850e6 * (260 / 590), margin: 0.825, capexPerMw: 1.5e6, capexKind: "landlord", capexNote: "Core funds up to about $1.5M per MW. CoreWeave pays the rest.", source: "corz-deck", note: "Mid-2026 target. Revenue is this site's share of the $850M CoreWeave program, by megawatts." },
-      { id: "corz-dalton", campus: "dalton", label: "Dalton", tier: "contracted", tenant: "CoreWeave", mw: 175, unit: "leased-power", start: "2026-03-31", full: "2027-03-31", timing: "company", revenue: 850e6 * (175 / 590), margin: 0.825, capexPerMw: 1.5e6, capexKind: "landlord", capexNote: "Core funds up to about $1.5M per MW. CoreWeave pays the rest.", source: "corz-deck", note: "30 MW delivered, the rest by early 2027." },
-      { id: "corz-muskogee", campus: "muskogee", label: "Muskogee", tier: "contracted", tenant: "CoreWeave", mw: 70, unit: "leased-power", start: "2026-06-30", full: "2026-12-31", timing: "estimate", revenue: 850e6 * (70 / 590), margin: 0.825, capexPerMw: 1.5e6, capexKind: "landlord", capexNote: "Core funds up to about $1.5M per MW. CoreWeave pays the rest.", source: "corz-deck" },
+      { id: "corz-marble", campus: "marble", label: "Marble", tier: "live", tenant: "CoreWeave", mw: 65, unit: "leased-power", start: "2026-05-01", timing: "company", revenue: 850e6 * (65 / 590), margin: 0.825, termYears: 12, capexPerMw: 1.5e6, capexKind: "landlord", capexNote: "Core funds up to about $1.5M per MW. CoreWeave pays the rest.", source: "corz-deck", note: "Revenue is this site's share of the $850M CoreWeave program, by megawatts." },
+      { id: "corz-austin", campus: "austin", label: "Austin", tier: "live", tenant: "CoreWeave", mw: 20, unit: "leased-power", start: "2026-05-01", timing: "company", revenue: 850e6 * (20 / 590), margin: 0.825, termYears: 12, capexPerMw: 1.5e6, capexKind: "landlord", capexNote: "Core funds up to about $1.5M per MW. CoreWeave pays the rest.", source: "corz-deck", note: "Revenue is this site's share of the $850M CoreWeave program, by megawatts." },
+      { id: "corz-denton", campus: "denton", label: "Denton", tier: "contracted", tenant: "CoreWeave", mw: 260, unit: "leased-power", start: "2026-01-01", full: "2026-09-30", timing: "estimate", revenue: 850e6 * (260 / 590), margin: 0.825, termYears: 12, capexPerMw: 1.5e6, capexKind: "landlord", capexNote: "Core funds up to about $1.5M per MW. CoreWeave pays the rest.", source: "corz-deck", note: "Mid-2026 target. Revenue is this site's share of the $850M CoreWeave program, by megawatts." },
+      { id: "corz-dalton", campus: "dalton", label: "Dalton", tier: "contracted", tenant: "CoreWeave", mw: 175, unit: "leased-power", start: "2026-03-31", full: "2027-03-31", timing: "company", revenue: 850e6 * (175 / 590), margin: 0.825, termYears: 12, capexPerMw: 1.5e6, capexKind: "landlord", capexNote: "Core funds up to about $1.5M per MW. CoreWeave pays the rest.", source: "corz-deck", note: "30 MW delivered, the rest by early 2027." },
+      { id: "corz-muskogee", campus: "muskogee", label: "Muskogee", tier: "contracted", tenant: "CoreWeave", mw: 70, unit: "leased-power", start: "2026-06-30", full: "2026-12-31", timing: "estimate", revenue: 850e6 * (70 / 590), margin: 0.825, termYears: 12, capexPerMw: 1.5e6, capexKind: "landlord", capexNote: "Core funds up to about $1.5M per MW. CoreWeave pays the rest.", source: "corz-deck" },
       { id: "corz-amd", campus: "pecos", label: "AMD triple-net: Pecos, Hunt County, Muskogee", tier: "contracted", tenant: "AMD", mw: 380, unit: "critical-it", start: "2027-06-30", full: "2028-06-30", timing: "estimate", revenue: (14e9 / 15) * (380 / 530), termYears: 15, capexKind: "shell", source: "corz-q2", note: "This lease's share of $14B over 15 years, by megawatts. Delivery dates are our placement." },
       { id: "corz-neo", campus: "auburn", label: "AMD-backed neocloud: Auburn, Dalton", tier: "contracted", tenant: "Neocloud backed by AMD", mw: 150, unit: "critical-it", start: "2027-06-30", full: "2028-06-30", timing: "estimate", revenue: (14e9 / 15) * (150 / 530), termYears: 15, capexKind: "shell", source: "corz-q2", note: "This lease's share of $14B over 15 years, by megawatts." },
       { id: "corz-amd-option", campus: "pecos", label: "AMD reservation", tier: "pipeline", tenant: "AMD", mw: 2000, unit: "gross", start: "2029-01-01", full: "2030-12-31", timing: "estimate", capexKind: "shell", source: "corz-q2", note: "AMD holds a reservation on up to 2 GW more." },
     ],
     deals: [
-      { id: "corz-cw", name: "CoreWeave program", tenant: "CoreWeave", status: "contracted", itMw: 590, annualRevenueUsd: 850e6, note: "About 590 MW of leased power and $850M of average annual colocation revenue. 243 MW was billing at about $350M a year with the May 10-Q. Margin of 80–85% on Core's slide.", source: "corz-deck" },
+      { id: "corz-cw", name: "CoreWeave program", tenant: "CoreWeave", status: "contracted", itMw: 590, termYears: 12, contractValueUsd: 10.2e9, annualRevenueUsd: 850e6, note: "About 590 MW and $10.2B over 12-year terms, or $850M a year, with two five-year renewal options. 243 MW was billing at about $350M a year with the May 10-Q. Margin of 80–85% on Core's slide.", source: "corz-cw" },
       { id: "corz-amd", name: "AMD and AMD-backed neocloud", tenant: "AMD", status: "contracted", itMw: 530, termYears: 15, contractValueUsd: 14e9, annualRevenueUsd: 14e9 / 15, note: "Over $14B of base rent across 15 years. About 380 MW triple-net to AMD and 150 MW to a neocloud with AMD credit support.", source: "corz-q2" },
     ],
     costs: [
