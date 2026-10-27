@@ -46,6 +46,22 @@ function empty(ticker: string, error: string): Quote {
   };
 }
 
+/**
+ * Price and the day's move. After the close, the history already has today's row, so the move is against the row
+ * before it. During the session today's row is not there yet: the price is the live quote and the move is against
+ * the latest close.
+ */
+export function dailyMove(closes: { date: string; close: number }[], livePrice: number | null, liveAsOf: string | null) {
+  const latest = closes.at(-1) ?? null;
+  const closed = latest != null && (!liveAsOf || latest.date >= liveAsOf);
+  const price = closed ? latest.close : livePrice;
+  const asOf = closed ? latest.date : liveAsOf;
+  const prev = closed ? closes.at(-2) ?? null : latest;
+  const change = price != null && prev ? price - prev.close : null;
+  const changePercent = price != null && prev && prev.close ? (price / prev.close - 1) * 100 : null;
+  return { price, asOf, change, changePercent };
+}
+
 export async function fetchQuote(ticker: string): Promise<Quote> {
   const now = new Date();
   const end = now.toISOString().slice(0, 10);
@@ -73,16 +89,12 @@ export async function fetchQuote(ticker: string): Promise<Quote> {
         }).sort((a, b) => a.date.localeCompare(b.date))
       : [];
 
-    const latest = closes.at(-1) ?? null;
-    const prev = closes.at(-2) ?? null;
     const infoPrice = money(asRecord(primary)?.lastSalePrice);
     const infoAsOf = typeof asRecord(primary)?.lastTradeTimestamp === "string"
       ? isoFromLong(String(asRecord(primary)?.lastTradeTimestamp))
       : null;
-    const price = latest && (!infoAsOf || latest.date >= infoAsOf) ? latest.close : infoPrice;
-    const asOf = latest && (!infoAsOf || latest.date >= infoAsOf) ? latest.date : infoAsOf;
-    const change = price != null && prev ? price - prev.close : money(asRecord(primary)?.netChange);
-    const changePercent = price != null && prev && prev.close ? (price / prev.close - 1) * 100 : null;
+    const { price, asOf, change: dayChange, changePercent } = dailyMove(closes, infoPrice, infoAsOf);
+    const change = dayChange ?? money(asRecord(primary)?.netChange);
     const marketCap = money(asRecord(asRecord(summaryData)?.MarketCap)?.value);
     const range = String(asRecord(asRecord(summaryData)?.FiftTwoWeekHighLow)?.value ?? "");
     const [high, low] = range.split("/").map((part) => money(part));
