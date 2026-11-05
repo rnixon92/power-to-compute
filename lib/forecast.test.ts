@@ -44,7 +44,7 @@ describe("ledger", () => {
     expect(signedMw(companyByTicker("APLD")!, s)).toBe(1410);
     expect(signedMw(companyByTicker("CORZ")!, s)).toBe(590 + 530);
     expect(signedMw(companyByTicker("MARA")!, s)).toBe(0);
-    expect(signedMw(companyByTicker("RIOT")!, s)).toBe(241);
+    expect(signedMw(companyByTicker("RIOT")!, s)).toBe(1151);
     expect(signedMw(companyByTicker("CLSK")!, s)).toBe(175);
   });
 
